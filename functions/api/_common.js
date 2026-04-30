@@ -29,51 +29,47 @@ export function makeUID(prefix = "AZR") {
 }
 
 export async function ensureSchema(DB) {
-  await DB.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      uid TEXT PRIMARY KEY,
-      username TEXT NOT NULL,
-      email TEXT,
-      password TEXT,
-      provider TEXT DEFAULT 'local',
-      avatar TEXT,
-      coins INTEGER DEFAULT 0,
-      vip INTEGER DEFAULT 0,
-      role TEXT DEFAULT 'user',
-      createdAt INTEGER,
-      updatedAt INTEGER,
-      lastLoginAt INTEGER,
-      extra TEXT
-    );
+  await DB.prepare(`CREATE TABLE IF NOT EXISTS users (
+    uid TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    email TEXT,
+    password TEXT,
+    provider TEXT DEFAULT 'local',
+    avatar TEXT,
+    coins INTEGER DEFAULT 0,
+    vip INTEGER DEFAULT 0,
+    role TEXT DEFAULT 'user',
+    createdAt INTEGER,
+    updatedAt INTEGER,
+    lastLoginAt INTEGER,
+    extra TEXT
+  )`).run();
 
-    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-    CREATE INDEX IF NOT EXISTS idx_users_provider ON users(provider);
-    CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+  await DB.prepare(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`).run();
+  await DB.prepare(`CREATE INDEX IF NOT EXISTS idx_users_provider ON users(provider)`).run();
+  await DB.prepare(`CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`).run();
 
-    CREATE TABLE IF NOT EXISTS app_data (
-      key TEXT PRIMARY KEY,
-      value TEXT,
-      updatedAt INTEGER
-    );
+  await DB.prepare(`CREATE TABLE IF NOT EXISTS app_data (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updatedAt INTEGER
+  )`).run();
 
-    CREATE TABLE IF NOT EXISTS audit_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      action TEXT,
-      uid TEXT,
-      payload TEXT,
-      createdAt INTEGER
-    );
-  `);
+  await DB.prepare(`CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT,
+    uid TEXT,
+    payload TEXT,
+    createdAt INTEGER
+  )`).run();
 
   const owner = await DB.prepare("SELECT uid FROM users WHERE uid=?").bind(OWNER_ID).first();
   if (!owner) {
-    await DB.prepare(`
-      INSERT INTO users (uid, username, email, password, provider, avatar, coins, vip, role, createdAt, updatedAt, lastLoginAt, extra)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      OWNER_ID, "Owner", "owner@azura.uz", OWNER_PASSWORD, "local", "",
-      99999, 1, "owner", now(), now(), now(), "{}"
-    ).run();
+    await DB.prepare(`INSERT INTO users
+      (uid, username, email, password, provider, avatar, coins, vip, role, createdAt, updatedAt, lastLoginAt, extra)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(OWNER_ID, "Owner", "owner@azura.uz", OWNER_PASSWORD, "local", "", 99999, 1, "owner", now(), now(), now(), "{}")
+      .run();
   }
 }
 
@@ -117,17 +113,18 @@ export async function upsertUser(DB, raw) {
   const existing = await DB.prepare("SELECT * FROM users WHERE uid=?").bind(uid).first();
 
   if (existing) {
-    await DB.prepare(`
-      UPDATE users
+    await DB.prepare(`UPDATE users
       SET username=?, email=?, password=COALESCE(NULLIF(?, ''), password),
           provider=?, avatar=?, coins=?, vip=?, role=?, updatedAt=?, extra=?
-      WHERE uid=?
-    `).bind(username, email, password, provider, avatar, coins, vip, role, t, extra, uid).run();
+      WHERE uid=?`)
+      .bind(username, email, password, provider, avatar, coins, vip, role, t, extra, uid)
+      .run();
   } else {
-    await DB.prepare(`
-      INSERT INTO users (uid, username, email, password, provider, avatar, coins, vip, role, createdAt, updatedAt, lastLoginAt, extra)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(uid, username, email, password, provider, avatar, coins, vip, role, createdAt, t, t, extra).run();
+    await DB.prepare(`INSERT INTO users
+      (uid, username, email, password, provider, avatar, coins, vip, role, createdAt, updatedAt, lastLoginAt, extra)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(uid, username, email, password, provider, avatar, coins, vip, role, createdAt, t, t, extra)
+      .run();
   }
 
   return normalizeUser(await DB.prepare("SELECT * FROM users WHERE uid=?").bind(uid).first());
@@ -138,11 +135,4 @@ export async function audit(DB, action, uid, payload = {}) {
     await DB.prepare("INSERT INTO audit_log (action, uid, payload, createdAt) VALUES (?, ?, ?, ?)")
       .bind(action, uid || "", JSON.stringify(payload || {}), now()).run();
   } catch (_) {}
-}
-
-export async function isAdmin(DB, uid) {
-  if (!uid) return false;
-  if (uid === OWNER_ID) return true;
-  const u = await DB.prepare("SELECT role FROM users WHERE uid=?").bind(uid).first();
-  return !!u && (u.role === "owner" || u.role === "admin");
 }
