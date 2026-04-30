@@ -1,0 +1,218 @@
+/* AZURA Hard Split v1 — strict desktop/mobile separation + admin cleanup */
+
+body.az-layout-desktop .mobile-topbar,
+body.az-layout-desktop .mobile-bottom-nav,
+body.az-layout-desktop nav.mobile-bottom-nav,
+body.az-layout-desktop .admin-mobile-hamburger,
+body.az-layout-desktop .admin-mobile-backdrop{
+  display:none !important;
+}
+
+body.az-layout-mobile .desktop-sidebar,
+body.az-layout-mobile .desktop-topbar,
+body.az-layout-mobile .sidebar-logo,
+body.az-layout-mobile .sidebar-bottom,
+body.az-layout-mobile .sidebar-nav{
+  display:none !important;
+}
+
+body.az-layout-desktop .desktop-sidebar{
+  display:flex !important;
+}
+body.az-layout-desktop .desktop-topbar{
+  display:flex !important;
+}
+body.az-layout-mobile .mobile-topbar,
+body.az-layout-mobile .mobile-bottom-nav,
+body.az-layout-mobile nav.mobile-bottom-nav{
+  display:flex !important;
+}
+
+body.az-layout-desktop .page{
+  padding-left: var(--sidebar-w) !important;
+  padding-bottom: 0 !important;
+  flex-direction: column !important;
+}
+body.az-layout-mobile .page{
+  padding-left: 0 !important;
+  padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 16px) !important;
+  flex-direction: column !important;
+}
+body.az-layout-mobile .main-content{
+  padding-top: 0 !important;
+}
+body.az-layout-desktop .main-content{
+  padding-top: 60px !important;
+}
+
+body.az-layout-desktop .desktop-sidebar{
+  width: 232px;
+  background: linear-gradient(180deg, rgba(8,9,18,.98), rgba(12,13,24,.98));
+  border-right: 1px solid rgba(255,255,255,.06);
+  box-shadow: 12px 0 40px rgba(0,0,0,.32);
+}
+body.az-layout-desktop .desktop-topbar{
+  left: 232px !important;
+  height: 66px;
+  background: linear-gradient(180deg, rgba(8,9,18,.96), rgba(8,9,18,.82));
+}
+body.az-layout-desktop .page.active .main-content > *{
+  max-width: min(1460px, calc(100vw - 290px));
+  margin-inline: auto;
+}
+body.az-layout-desktop .hero,
+body.az-layout-desktop .hero-section,
+body.az-layout-desktop .rb-hero,
+body.az-layout-desktop .detail-page-wrap,
+body.az-layout-desktop .profile-hero-wrap{
+  border-radius: 28px !important;
+}
+
+body.az-layout-mobile{
+  background: linear-gradient(180deg, #070811, #0a0d18);
+}
+body.az-layout-mobile .mobile-topbar{
+  min-height: 58px;
+  padding: 0 14px;
+  backdrop-filter: blur(18px);
+  background: linear-gradient(180deg, rgba(8,9,16,.92), rgba(8,9,16,.76));
+}
+body.az-layout-mobile .mobile-bottom-nav,
+body.az-layout-mobile nav.mobile-bottom-nav{
+  left: 8px !important;
+  right: 8px !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
+  height: auto !important;
+  min-height: 62px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 22px !important;
+  background: rgba(10,12,21,.88) !important;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 44px rgba(0,0,0,.35);
+}
+body.az-layout-mobile .bot-nav-item,
+body.az-layout-mobile .bot-add-btn{
+  flex: 1 1 0;
+  min-width: 0;
+}
+body.az-layout-mobile .bot-nav-label{
+  font-size: 10px !important;
+}
+body.az-layout-mobile .page.active .main-content > *{
+  max-width: 100% !important;
+}
+body.az-layout-mobile .card,
+body.az-layout-mobile .manga-card,
+body.az-layout-mobile .profile-menu-card,
+body.az-layout-mobile .az-user-card{
+  border-radius: 18px !important;
+}
+
+body.az-layout-mobile .admin-mobile-hamburger.show{
+  display:flex !important;
+}
+body.az-layout-mobile #page-admin .admin-layout{
+  display:block !important;
+  padding-top: 0 !important;
+}
+body.az-layout-mobile #page-admin .admin-sidebar{
+  position: fixed !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: min(86vw, 300px) !important;
+  background: linear-gradient(180deg, rgba(8,9,16,.98), rgba(11,12,22,.98));
+  z-index: 1001 !important;
+  transform: translateX(-104%);
+  transition: transform .24s ease;
+  box-shadow: 12px 0 34px rgba(0,0,0,.5);
+}
+body.az-layout-mobile #page-admin .admin-sidebar.mobile-open{
+  transform: translateX(0);
+}
+body.az-layout-mobile #page-admin .admin-main{
+  padding: 12px !important;
+}
+body.az-layout-mobile #page-admin .desktop-topbar,
+body.az-layout-mobile #page-admin .admin-section-label{
+  display:none !important;
+}
+
+body.az-layout-desktop #page-admin .admin-layout{
+  display:grid !important;
+  grid-template-columns: 248px minmax(0,1fr);
+  gap: 0;
+  min-height: calc(100vh - 66px);
+}
+body.az-layout-desktop #page-admin .admin-sidebar{
+  display:block !important;
+  position: sticky;
+  top: 66px;
+  height: calc(100vh - 66px);
+}
+body.az-layout-desktop #page-admin .admin-sidebar-inner{
+  width: 248px !important;
+  height: 100%;
+  background: linear-gradient(180deg, rgba(12,13,24,.98), rgba(8,9,18,.98));
+  border-right: 1px solid rgba(255,255,255,.06);
+}
+body.az-layout-desktop #page-admin .admin-main{
+  min-width: 0;
+  padding: 18px 18px 24px !important;
+}
+
+.az-local-preview-chip{
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 9998;
+  max-width: min(92vw, 360px);
+  padding: 11px 14px;
+  border-radius: 16px;
+  background: rgba(16,17,30,.92);
+  color: #f2f5fb;
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 16px 38px rgba(0,0,0,.34);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.az-local-preview-chip b{ color: #78f5ff; }
+.az-local-preview-chip button{
+  margin-top: 10px;
+  border: 0;
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: rgba(120,245,255,.15);
+  color: #eafcff;
+  cursor: pointer;
+}
+
+.az-owner-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:7px 10px;
+  border-radius:999px;
+  background: rgba(212,175,55,.12);
+  border: 1px solid rgba(212,175,55,.22);
+  color: var(--gold-light);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.az-bn-audio-btn.az-on{
+  background: rgba(120,245,255,.18) !important;
+  border-color: rgba(120,245,255,.28) !important;
+}
+
+@media (max-width: 380px){
+  body.az-layout-mobile .mobile-bottom-nav,
+  body.az-layout-mobile nav.mobile-bottom-nav{
+    left: 6px !important;
+    right: 6px !important;
+    border-radius: 18px !important;
+  }
+  body.az-layout-mobile .bot-nav-label{
+    font-size: 9px !important;
+  }
+}

@@ -1,0 +1,610 @@
+
+/* AZURA Reborn Theme — mobile-first redesign without breaking legacy logic */
+:root{
+  --rb-bg:#050816;
+  --rb-bg-2:#0b1024;
+  --rb-surface:rgba(12,18,38,.78);
+  --rb-surface-2:rgba(20,28,56,.92);
+  --rb-border:rgba(113,135,255,.18);
+  --rb-border-strong:rgba(120,245,255,.35);
+  --rb-text:#eef3ff;
+  --rb-muted:#95a3cf;
+  --rb-soft:#cad4ff;
+  --rb-cyan:#78f5ff;
+  --rb-violet:#8b7bff;
+  --rb-pink:#ff7dd1;
+  --rb-green:#50f3a4;
+  --rb-gold:#ffdc7b;
+  --rb-shadow:0 20px 60px rgba(0,0,0,.35);
+  --rb-radius:24px;
+  --rb-radius-sm:18px;
+  --rb-blur:16px;
+}
+
+html,body{
+  background:
+    radial-gradient(1000px 500px at 10% -10%, rgba(120,245,255,.12), transparent 60%),
+    radial-gradient(900px 420px at 100% 0%, rgba(139,123,255,.14), transparent 55%),
+    radial-gradient(800px 500px at 50% 100%, rgba(255,125,209,.08), transparent 60%),
+    linear-gradient(180deg,var(--rb-bg),var(--rb-bg-2));
+  color:var(--rb-text);
+}
+
+body.azura-reborn{
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+body.azura-reborn::before{
+  content:"";
+  position:fixed; inset:0;
+  pointer-events:none;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.02), transparent 20%),
+    linear-gradient(90deg, rgba(120,245,255,.03), transparent 18%, transparent 82%, rgba(139,123,255,.03));
+  z-index:0;
+}
+
+body.azura-reborn .page{
+  padding-bottom:calc(98px + env(safe-area-inset-bottom));
+  position:relative;
+  z-index:1;
+}
+
+body.azura-reborn .topbar,
+body.azura-reborn .topbar-desktop,
+body.azura-reborn .sidebar,
+body.azura-reborn .admin-sidebar-inner,
+body.azura-reborn .admin-main,
+body.azura-reborn .hero-banner,
+body.azura-reborn .vip-banner,
+body.azura-reborn .azura-modal-box,
+body.azura-reborn .coin-pkg,
+body.azura-reborn .profile-menu-card,
+body.azura-reborn .chapter-item,
+body.azura-reborn .lib-item,
+body.azura-reborn .manga-thumb,
+body.azura-reborn .detail-cover-small,
+body.azura-reborn .adult-admin-panel-inner,
+body.azura-reborn .adult-page-inner,
+body.azura-reborn .section,
+body.azura-reborn .promo-card,
+body.azura-reborn .admin-layout{
+  border:1px solid var(--rb-border);
+  background:linear-gradient(180deg, rgba(14,20,44,.82), rgba(7,11,28,.9));
+  box-shadow:var(--rb-shadow);
+  backdrop-filter:blur(var(--rb-blur));
+}
+
+body.azura-reborn .topbar,
+body.azura-reborn .topbar-desktop{
+  margin:10px 12px 12px;
+  border-radius:22px;
+  background:linear-gradient(180deg, rgba(14,20,44,.9), rgba(6,10,25,.92));
+}
+
+body.azura-reborn .section{
+  margin:0 12px 16px;
+  border-radius:24px;
+  padding:18px 14px;
+  background:linear-gradient(180deg, rgba(10,16,38,.68), rgba(6,10,24,.5));
+}
+
+body.azura-reborn .section-title,
+body.azura-reborn .az-footer-col-title,
+body.azura-reborn .profile-menu-section-title{
+  color:var(--rb-soft);
+  letter-spacing:1.6px;
+  font-size:12px;
+}
+
+body.azura-reborn .hero-banner{
+  margin:0 12px 18px;
+  min-height:420px;
+  border-radius:30px;
+  overflow:hidden;
+  border:1px solid rgba(120,245,255,.18);
+  background:
+    radial-gradient(circle at 80% 15%, rgba(120,245,255,.22), transparent 28%),
+    radial-gradient(circle at 10% 15%, rgba(139,123,255,.2), transparent 25%),
+    linear-gradient(180deg, rgba(8,12,28,.82), rgba(4,6,16,.92));
+}
+
+body.azura-reborn .hero-artwork::after,
+body.azura-reborn .detail-cover-wrapper::after{
+  content:"";
+  position:absolute; inset:0;
+  background:linear-gradient(180deg, rgba(6,10,24,.1), rgba(6,10,24,.6) 55%, rgba(6,10,24,.95));
+}
+
+body.azura-reborn .hero-img,
+body.azura-reborn .detail-cover-img{
+  opacity:.78;
+  filter:saturate(1.06) contrast(1.05);
+}
+
+body.azura-reborn .hero-content{
+  padding:28px 20px 22px;
+  background:linear-gradient(180deg, transparent 0%, rgba(5,8,20,.24) 20%, rgba(5,8,20,.94) 100%);
+}
+
+body.azura-reborn .hero-tag{
+  background:linear-gradient(135deg, rgba(120,245,255,.16), rgba(139,123,255,.22));
+  border:1px solid rgba(120,245,255,.25);
+  color:var(--rb-cyan);
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:10px;
+}
+
+body.azura-reborn .hero-title,
+body.azura-reborn .detail-title,
+body.azura-reborn .vip-title,
+body.azura-reborn .profile-name{
+  font-family:'Inter', system-ui, sans-serif;
+  letter-spacing:-.02em;
+  font-weight:800;
+  text-shadow:none;
+}
+
+body.azura-reborn .hero-title{
+  font-size:clamp(26px,7vw,52px);
+  line-height:1.02;
+  margin-bottom:10px;
+}
+
+body.azura-reborn .hero-desc{
+  max-width:620px;
+  color:var(--rb-muted);
+  font-size:14px;
+  line-height:1.65;
+  margin-bottom:18px;
+}
+
+body.azura-reborn .btn-primary,
+body.azura-reborn .azura-btn-primary,
+body.azura-reborn .bn-edit-save,
+body.azura-reborn .mhp-btn.primary{
+  background:linear-gradient(135deg,var(--rb-cyan),var(--rb-violet));
+  color:#04101b;
+  border:none;
+  border-radius:16px;
+  padding:12px 18px;
+  font-weight:800;
+  box-shadow:0 10px 30px rgba(120,245,255,.22);
+}
+
+body.azura-reborn .btn-outline,
+body.azura-reborn .mhp-btn.outline,
+body.azura-reborn .bn-edit-cancel{
+  background:rgba(255,255,255,.03);
+  color:var(--rb-text);
+  border:1px solid rgba(120,245,255,.18);
+  border-radius:16px;
+  padding:12px 18px;
+}
+
+body.azura-reborn .manga-card{
+  width:148px;
+  transition:transform .18s ease, filter .18s ease;
+}
+
+body.azura-reborn .manga-thumb{
+  border-radius:22px;
+  overflow:hidden;
+  border:1px solid rgba(120,245,255,.16);
+  background:linear-gradient(180deg, rgba(15,22,49,.9), rgba(6,10,24,.96));
+}
+
+body.azura-reborn .manga-thumb img{
+  transform:scale(1.01);
+}
+
+body.azura-reborn .manga-rank{
+  top:10px; left:10px;
+  width:34px; height:34px;
+  border-radius:12px;
+  background:rgba(7,12,24,.82);
+  backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.08);
+}
+
+body.azura-reborn .manga-info{ padding:10px 4px 2px; }
+body.azura-reborn .manga-title{
+  color:var(--rb-text);
+  font-size:12px;
+  font-weight:700;
+}
+body.azura-reborn .manga-meta{
+  color:var(--rb-muted);
+  font-size:10px;
+}
+
+body.azura-reborn .scroll-row{
+  gap:14px;
+  padding-bottom:2px;
+}
+
+body.azura-reborn .detail-cover-wrapper{
+  height:min(44vh, 420px);
+  margin:10px 12px 0;
+  border-radius:28px 28px 0 0;
+  overflow:hidden;
+  border:1px solid rgba(120,245,255,.16);
+}
+
+body.azura-reborn .detail-info{
+  margin: -52px 12px 0;
+  padding:0 16px 16px;
+  background:linear-gradient(180deg, rgba(7,11,27,.72), rgba(7,11,27,.96));
+  border-radius:26px;
+  border:1px solid var(--rb-border);
+  backdrop-filter:blur(18px);
+}
+
+body.azura-reborn .detail-cover-small{
+  width:108px; height:148px;
+  border-radius:24px;
+  border-color:rgba(120,245,255,.22);
+}
+
+body.azura-reborn .detail-stats{
+  gap:8px;
+}
+
+body.azura-reborn .detail-stat{
+  padding:8px 11px;
+  border-radius:999px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.06);
+  color:var(--rb-muted);
+}
+
+body.azura-reborn #chapter-list,
+body.azura-reborn #library-list,
+body.azura-reborn #coin-packages{
+  margin:0 12px 16px;
+}
+
+body.azura-reborn .chapter-item,
+body.azura-reborn .lib-item{
+  margin-bottom:10px;
+  border-radius:20px;
+  border-bottom:none;
+  padding:14px;
+}
+
+body.azura-reborn .chapter-thumb,
+body.azura-reborn .lib-cover{
+  border-radius:16px;
+  border:1px solid rgba(120,245,255,.16);
+  background:linear-gradient(180deg, rgba(20,28,56,.92), rgba(7,10,25,.94));
+}
+
+body.azura-reborn .coin-grid{
+  gap:12px;
+  padding:0 12px 10px;
+}
+
+body.azura-reborn .coin-pkg{
+  border-radius:22px;
+  background:linear-gradient(180deg, rgba(11,18,42,.88), rgba(7,11,27,.98));
+  border-color:rgba(120,245,255,.14);
+}
+
+body.azura-reborn .pkg-badge{
+  background:linear-gradient(135deg,var(--rb-gold),#ff9d5c);
+  color:#1a1300;
+  top:12px;
+  border-radius:999px;
+  padding:4px 10px;
+}
+
+body.azura-reborn .vip-banner{
+  border-radius:28px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255,220,123,.1), transparent 20%),
+    linear-gradient(135deg, rgba(34,24,7,.98), rgba(10,12,25,.98));
+  border-color:rgba(255,220,123,.18);
+}
+
+body.azura-reborn .profile-hero-wrap,
+body.azura-reborn .profile-menu-card,
+body.azura-reborn .admin-main,
+body.azura-reborn .admin-sidebar-inner{
+  border-radius:24px;
+}
+
+body.azura-reborn .profile-avatar{
+  box-shadow:0 12px 36px rgba(120,245,255,.24);
+  background:linear-gradient(135deg,var(--rb-cyan),var(--rb-violet));
+  color:#07101d;
+}
+
+body.azura-reborn .profile-menu-card-icon{
+  border-radius:16px;
+  background:linear-gradient(135deg, rgba(120,245,255,.12), rgba(139,123,255,.16));
+  border:1px solid rgba(120,245,255,.16);
+}
+
+body.azura-reborn .admin-layout{
+  margin:10px 12px 16px;
+  padding:12px;
+  border-radius:28px;
+  gap:12px;
+}
+
+body.azura-reborn .admin-sidebar-inner{
+  background:linear-gradient(180deg, rgba(10,16,39,.94), rgba(7,11,27,.98));
+}
+
+body.azura-reborn .admin-nav-item{
+  border-radius:16px;
+  border:1px solid transparent;
+  margin-bottom:8px;
+  transition:.18s ease;
+}
+body.azura-reborn .admin-nav-item.active,
+body.azura-reborn .admin-nav-item:hover{
+  background:linear-gradient(135deg, rgba(120,245,255,.16), rgba(139,123,255,.18));
+  border-color:rgba(120,245,255,.2);
+}
+
+body.azura-reborn .az-admin-users-pro{
+  padding:4px;
+}
+body.azura-reborn .az-user-card{
+  border-radius:24px !important;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(120,245,255,.08), transparent 30%),
+    linear-gradient(180deg, rgba(15,22,49,.88), rgba(7,11,27,.98)) !important;
+  border:1px solid rgba(120,245,255,.12) !important;
+}
+body.azura-reborn .az-user-actions button,
+body.azura-reborn .az-coin-line button,
+body.azura-reborn .az-au-sync{
+  border-radius:14px !important;
+  min-height:44px;
+}
+
+body.azura-reborn .az-user-actions .vip{
+  background:linear-gradient(135deg, rgba(255,220,123,.16), rgba(255,157,92,.14)) !important;
+  color:#ffe9b0 !important;
+}
+body.azura-reborn .az-user-actions .admin{
+  background:linear-gradient(135deg, rgba(255,125,209,.14), rgba(139,123,255,.14)) !important;
+  color:#ffd0ee !important;
+}
+body.azura-reborn .az-user-actions .danger{
+  background:linear-gradient(135deg, rgba(255,86,116,.14), rgba(255,125,209,.1)) !important;
+}
+
+body.azura-reborn .mobile-bottom-nav{
+  position:fixed !important;
+  left:10px; right:10px;
+  bottom:calc(10px + env(safe-area-inset-bottom));
+  display:flex !important;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:10px;
+  border-radius:24px;
+  background:rgba(9,13,31,.86);
+  border:1px solid rgba(120,245,255,.14);
+  box-shadow:0 20px 60px rgba(0,0,0,.42);
+  backdrop-filter:blur(16px);
+  z-index:999;
+}
+
+body.azura-reborn .bot-nav-item,
+body.azura-reborn .bot-add-btn{
+  min-height:56px;
+  border-radius:18px;
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  color:var(--rb-muted);
+  background:transparent;
+}
+
+body.azura-reborn .bot-nav-item.active,
+body.azura-reborn .bot-add-btn.active{
+  background:linear-gradient(135deg, rgba(120,245,255,.16), rgba(139,123,255,.16));
+  color:var(--rb-cyan);
+  border:1px solid rgba(120,245,255,.18);
+}
+body.azura-reborn .bot-add-btn{
+  max-width:none;
+  color:var(--rb-text);
+  font-size:14px;
+  font-weight:700;
+}
+body.azura-reborn .bot-nav-label{
+  font-size:11px;
+  letter-spacing:.01em;
+}
+body.azura-reborn .bot-nav-icon svg,
+body.azura-reborn .bot-add-btn svg{
+  filter:none;
+}
+
+body.azura-reborn .topbar-btn,
+body.azura-reborn .topbar-coin,
+body.azura-reborn .topbar-coins-d,
+body.azura-reborn .coin-display{
+  border-radius:14px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.06);
+  color:var(--rb-soft);
+}
+
+body.azura-reborn .sidebar{
+  border-radius:0 28px 28px 0;
+  background:linear-gradient(180deg, rgba(9,14,34,.96), rgba(6,10,24,.98));
+}
+
+body.azura-reborn .az-footer{
+  background:transparent;
+  padding-bottom:110px;
+}
+body.azura-reborn .az-footer-inner{
+  margin:0 12px 20px;
+  border-radius:28px;
+  border:1px solid var(--rb-border);
+  background:linear-gradient(180deg, rgba(10,15,35,.92), rgba(7,11,27,.96));
+  box-shadow:var(--rb-shadow);
+  padding:24px 16px;
+}
+
+body.azura-reborn .az-footer-logo{
+  color:var(--rb-text);
+  font-family:'Inter', system-ui, sans-serif;
+  font-weight:900;
+  letter-spacing:-.03em;
+}
+body.azura-reborn .az-footer-link,
+body.azura-reborn .az-footer-desc,
+body.azura-reborn .az-footer-copy{
+  color:var(--rb-muted);
+}
+body.azura-reborn .az-footer-badge{
+  border-radius:999px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.06);
+}
+
+body.azura-reborn .azura-modal-box{
+  border-radius:28px;
+  padding:24px 18px;
+  max-width:460px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(120,245,255,.1), transparent 26%),
+    radial-gradient(circle at 0% 0%, rgba(139,123,255,.12), transparent 25%),
+    linear-gradient(180deg, rgba(11,16,38,.96), rgba(7,11,27,.98));
+}
+body.azura-reborn .azura-input{
+  border-radius:16px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.06);
+  color:var(--rb-text);
+}
+body.azura-reborn .azura-tab{
+  border-radius:14px;
+  background:rgba(255,255,255,.03);
+}
+body.azura-reborn .azura-tab.active{
+  background:linear-gradient(135deg, rgba(120,245,255,.16), rgba(139,123,255,.18));
+  color:var(--rb-cyan);
+}
+
+body.azura-reborn .admin-mobile-hamburger{
+  backdrop-filter:blur(16px);
+  background:rgba(9,13,31,.82);
+  border:1px solid rgba(120,245,255,.16);
+  border-radius:16px;
+  box-shadow:var(--rb-shadow);
+}
+
+body.azura-reborn .az-cloud-sync{
+  border-radius:18px !important;
+  background:linear-gradient(135deg, rgba(11,16,38,.92), rgba(24,16,50,.92)) !important;
+  border:1px solid rgba(120,245,255,.22) !important;
+  color:var(--rb-cyan) !important;
+}
+
+body.azura-reborn .az-performance-chip{
+  position:fixed;
+  top:12px; right:12px;
+  z-index:998;
+  padding:8px 12px;
+  border-radius:999px;
+  background:rgba(9,13,31,.72);
+  border:1px solid rgba(120,245,255,.16);
+  color:var(--rb-muted);
+  font-size:11px;
+  backdrop-filter:blur(12px);
+  pointer-events:none;
+}
+
+body.azura-reborn .az-page-shell{
+  display:none;
+}
+
+@media (max-width: 920px){
+  body.azura-reborn .hero-banner{ min-height:340px; }
+  body.azura-reborn .hero-title{ font-size:clamp(24px,8vw,34px); }
+  body.azura-reborn .manga-card{ width:132px; }
+  body.azura-reborn .detail-header{ align-items:flex-start; }
+}
+
+@media (max-width: 680px){
+  body.azura-reborn .topbar,
+  body.azura-reborn .topbar-desktop{ margin:8px 10px 10px; border-radius:20px; }
+  body.azura-reborn .section{ margin:0 10px 14px; border-radius:22px; padding:16px 12px; }
+  body.azura-reborn .hero-banner{ margin:0 10px 14px; min-height:300px; border-radius:24px; }
+  body.azura-reborn .hero-content{ padding:18px 16px 16px; }
+  body.azura-reborn .hero-desc{ font-size:13px; margin-bottom:14px; }
+  body.azura-reborn .manga-card{ width:118px; }
+  body.azura-reborn .detail-cover-wrapper{ margin:8px 10px 0; height:220px; border-radius:22px 22px 0 0; }
+  body.azura-reborn .detail-info{ margin:-36px 10px 0; padding:0 12px 12px; border-radius:22px; }
+  body.azura-reborn .detail-cover-small{ width:88px; height:122px; border-radius:18px; }
+  body.azura-reborn #chapter-list,
+  body.azura-reborn #library-list,
+  body.azura-reborn #coin-packages{ margin:0 10px 14px; }
+  body.azura-reborn .chapter-item,
+  body.azura-reborn .lib-item{ padding:12px; border-radius:18px; }
+  body.azura-reborn .coin-grid{ grid-template-columns:repeat(2,1fr); padding:0 10px 8px; }
+  body.azura-reborn .vip-banner{ margin:10px; padding:18px 14px; border-radius:22px; }
+  body.azura-reborn .admin-layout{ margin:8px 10px 16px; border-radius:22px; padding:10px; }
+  body.azura-reborn .az-footer-inner{ margin:0 10px 12px; border-radius:24px; padding:20px 14px 110px; }
+}
+
+@media (max-width: 420px){
+  body.azura-reborn .hero-title{ font-size:22px; }
+  body.azura-reborn .hero-desc{ -webkit-line-clamp:3; }
+  body.azura-reborn .btn-primary,
+  body.azura-reborn .btn-outline,
+  body.azura-reborn .azura-btn-primary{ padding:11px 14px; font-size:13px; }
+  body.azura-reborn .manga-card{ width:104px; }
+  body.azura-reborn .mobile-bottom-nav{ left:8px; right:8px; bottom:calc(8px + env(safe-area-inset-bottom)); padding:8px; gap:6px; border-radius:20px; }
+  body.azura-reborn .bot-nav-item,
+  body.azura-reborn .bot-add-btn{ min-height:52px; border-radius:16px; }
+  body.azura-reborn .bot-nav-label{ font-size:10px; }
+}
+
+@media (hover:hover) and (pointer:fine){
+  body.azura-reborn .manga-card:hover{ transform:translateY(-4px); filter:brightness(1.04); }
+  body.azura-reborn .btn-primary:hover,
+  body.azura-reborn .btn-outline:hover,
+  body.azura-reborn .profile-menu-card:hover,
+  body.azura-reborn .coin-pkg:hover,
+  body.azura-reborn .chapter-item:hover,
+  body.azura-reborn .lib-item:hover{
+    transform:translateY(-2px);
+    border-color:var(--rb-border-strong);
+  }
+}
+
+@media (max-width:720px), (prefers-reduced-motion:reduce){
+  body.azura-reborn .manga-card,
+  body.azura-reborn .btn-primary,
+  body.azura-reborn .btn-outline,
+  body.azura-reborn .profile-menu-card,
+  body.azura-reborn .coin-pkg,
+  body.azura-reborn .chapter-item,
+  body.azura-reborn .lib-item,
+  body.azura-reborn .hero-banner,
+  body.azura-reborn .topbar,
+  body.azura-reborn .topbar-desktop{
+    transition:none !important;
+    animation:none !important;
+  }
+  body.azura-reborn [class*="particle"],
+  body.azura-reborn [class*="glow"],
+  body.azura-reborn .particles,
+  body.azura-reborn .heavy-glow{
+    display:none !important;
+  }
+}

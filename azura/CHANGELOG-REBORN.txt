@@ -1,0 +1,48 @@
+AZURA REBORN — changelog
+
+1) Yangi dizayn
+- azura-reborn.css qo'shildi
+- azura-reborn-ui.js qo'shildi
+- butun sayt glass + neon + mobile-first ko'rinishga o'tkazildi
+- kichik telefonlar uchun paddings, bottom nav, cards, hero qayta optimallashtirildi
+
+2) Admin panel -> Users menyusi qayta ishlangan
+- qidiruv
+- filter
+- VIP ber / VIP ol
+- Admin ber / Admin ol
+- coin -100 / qo'lda edit / +100
+- user delete
+- owner himoyalangan
+
+3) D1/R2 sync kuchaytirildi
+- auth patch
+- users global sync
+- banner media D1+R2 sync
+- chapters D1 merge
+- views global sync
+- library qurilma bo'ylab sync
+
+4) Performance
+- lazy image loading
+- video metadata preload
+- mobile hover/animation reduction
+- DOM optimize observer
+- R2 normal user badge removal
+- staff-only draggable cloud sync tugma
+
+5) Backend mustahkamlandi
+- D1 indexes qo'shildi
+- auth duplicate checks yaxshilandi
+- media GET byte-range stream qo'shildi
+- delete user -> library cleanup
+
+
+6) Adaptive polish update
+- desktop va mobile ko'rinishlari alohida classlar bilan ajratildi
+- banner video ovozi uchun persistent audio toggle qo'shildi
+- auth formga show/hide password va password strength qo'shildi
+- profile settings modal qo'shildi (username, email, avatar, parol, bio, telegram)
+- og'ir va bezovta qiluvchi floating elementlar tozalandi
+- sync observer yengillashtirildi
+- profile update endpoint uniqueness tekshiradi
