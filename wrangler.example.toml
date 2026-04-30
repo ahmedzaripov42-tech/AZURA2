@@ -1,0 +1,9 @@
+# Optional. Cloudflare dashboard binding ishlatsang bu shart emas.
+# Pages dashboarddagi binding nomi: DB
+name = "azura"
+compatibility_date = "2026-04-30"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "azura_db"
+database_id = "PASTE_YOUR_D1_DATABASE_ID_HERE"
