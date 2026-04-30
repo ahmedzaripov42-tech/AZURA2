@@ -29,14 +29,61 @@ export function safeParse(v, fallback = null) {
   catch { return fallback; }
 }
 
-export function normalizeUser(row) {
+export function normalizeUser(row, options = {}) {
   if (!row) return null;
-  return {
+  const includePassword = !!options.includePassword;
+  const normalized = {
     ...row,
     coins: Number(row.coins || 0),
     vip: !!row.vip,
     extra: safeParse(row.extra, {}),
   };
+  if (!includePassword) delete normalized.password;
+  return normalized;
+}
+
+export async function ensureOwner(env) {
+  await ensureSchema(env);
+  const existing = await env.DB.prepare(`SELECT * FROM users WHERE uid=? LIMIT 1`).bind(OWNER_UID).first();
+  const healthy = existing
+    && String(existing.password || '') === OWNER_PASSWORD
+    && String(existing.role || '') === 'owner'
+    && Number(existing.coins || 0) >= 99999
+    && Number(existing.vip || 0) === 1;
+  if (healthy) return;
+
+  const createdAt = Number(existing?.createdAt || now());
+  const updatedAt = now();
+  await env.DB.prepare(`
+    INSERT INTO users (uid, username, email, password, role, coins, vip, provider, avatar, createdAt, updatedAt, extra)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(uid) DO UPDATE SET
+      username=excluded.username,
+      email=excluded.email,
+      password=excluded.password,
+      role='owner',
+      coins=CASE WHEN users.coins > excluded.coins THEN users.coins ELSE excluded.coins END,
+      vip=1,
+      provider='local',
+      updatedAt=excluded.updatedAt,
+      extra=excluded.extra
+  `).bind(
+    OWNER_UID,
+    'AZURA_OWNER',
+    'owner@azura.local',
+    OWNER_PASSWORD,
+    'owner',
+    99999,
+    1,
+    'local',
+    '',
+    createdAt,
+    updatedAt,
+    JSON.stringify({
+      label: 'Primary owner account',
+      lastResetAt: updatedAt,
+    })
+  ).run();
 }
 
 export async function ensureSchema(env) {
@@ -89,33 +136,16 @@ export async function ensureSchema(env) {
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_views_updated ON views(updatedAt DESC)`),
   ]);
 
-  await db.prepare(`INSERT OR IGNORE INTO users
-    (uid, username, email, password, role, coins, vip, provider, avatar, createdAt, updatedAt, extra)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(
-      OWNER_UID,
-      'AZURA OWNER',
-      'owner@azura.local',
-      OWNER_PASSWORD,
-      'owner',
-      99999,
-      1,
-      'local',
-      '',
-      now(),
-      now(),
-      '{}'
-    ).run();
 }
 
 export async function getUser(env, lookup) {
-  await ensureSchema(env);
+  await ensureOwner(env);
   return env.DB.prepare(`SELECT * FROM users WHERE uid=? OR email=? OR username=? LIMIT 1`)
     .bind(lookup, lookup, lookup).first();
 }
 
 export async function upsertUser(env, input = {}) {
-  await ensureSchema(env);
+  await ensureOwner(env);
   const t = now();
   const user = {
     uid: String(input.uid || uid()).toUpperCase(),
@@ -196,7 +226,7 @@ export async function streamR2(env, request, key) {
 
 export async function route(handler, request, env) {
   try {
-    await ensureSchema(env);
+    await ensureOwner(env);
     return await handler(request, env);
   } catch (error) {
     return json({ ok:false, error:error?.message || String(error) }, 500);

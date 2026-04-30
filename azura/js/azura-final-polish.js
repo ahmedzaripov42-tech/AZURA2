@@ -140,6 +140,20 @@
       helper.textContent = 'Qulay login uchun username qisqa, email to‘g‘ri va parol kamida 6 belgi bo‘lsin.';
       regForm.appendChild(helper);
     }
+
+    var loginForm = $('#form-login') || $('#login-username')?.closest('form') || $('#btn-login')?.parentElement;
+    if (loginForm && !$('.az-owner-login-helper', loginForm)) {
+      var ownerBox = document.createElement('div');
+      ownerBox.className = 'az-owner-login-helper';
+      ownerBox.innerHTML = '<span>Owner</span><code>AZR-YJTF-QYGT</code><button type="button">Qo\'yish</button>';
+      loginForm.appendChild(ownerBox);
+      on($('button', ownerBox), 'click', function(){
+        var user = $('#login-username');
+        var pass = $('#login-password');
+        if (user) user.value = 'AZR-YJTF-QYGT';
+        if (pass) pass.value = 'azura2025owner';
+      });
+    }
   }
 
   function patchAuthRemembering(){
@@ -182,50 +196,111 @@
     if (window.__azuraBannerAudioPatched) return;
     window.__azuraBannerAudioPatched = true;
 
-    var original = window._azBnToggleAudio;
-    window._azBnToggleAudio = function(btn){
-      if (typeof original === 'function') original(btn);
-      var video = btn && btn.closest ? btn.closest('.az-bn-video-wrap').querySelector('video') : null;
-      if (video) {
-        localStorage.setItem('azura_banner_audio_pref', video.muted ? 'off' : 'on');
-        updateBannerAudioButtons();
-      }
-    };
+    var audioKey = 'azura_banner_audio_pref';
+    var activeKey = 'azura_banner_audio_active';
 
-    function updateBannerAudioButtons(){
-      var audioOn = localStorage.getItem('azura_banner_audio_pref') === 'on';
-      var activeAssigned = false;
-      $all('.az-bn-video-wrap').forEach(function(wrap){
-        var video = $('video', wrap);
-        var btn = $('.az-bn-audio-btn', wrap);
-        if (!video) return;
-        var rect = wrap.getBoundingClientRect();
-        var visible = rect.bottom > 80 && rect.top < window.innerHeight - 40;
-        var shouldPlayAudio = audioOn && visible && !activeAssigned;
-        if (shouldPlayAudio) activeAssigned = true;
-        if (shouldPlayAudio) {
-          video.muted = false;
-          video.volume = 1;
-          video.play().catch(function(){});
-        } else {
+    function allBannerVideos(){
+      return $all('.az-bn-video-wrap video');
+    }
+    function videoId(video){
+      if (!video) return '';
+      if (!video.dataset.azAudioId) video.dataset.azAudioId = 'bnv-' + Math.random().toString(36).slice(2, 10);
+      return video.dataset.azAudioId;
+    }
+    function isVisible(video){
+      if (!video) return false;
+      var rect = video.getBoundingClientRect();
+      return rect.bottom > 72 && rect.top < window.innerHeight - 56 && rect.width > 20 && rect.height > 20;
+    }
+    function setButtonState(video, on){
+      var btn = video && video.closest('.az-bn-video-wrap') ? $('.az-bn-audio-btn', video.closest('.az-bn-video-wrap')) : null;
+      if (!btn) return;
+      btn.classList.toggle('active', !!on);
+      btn.classList.toggle('az-on', !!on);
+      var icon = $('.az-bn-audio-icon', btn);
+      var label = $('.az-bn-audio-label', btn);
+      if (icon) icon.textContent = on ? '🔊' : '🔇';
+      if (label) label.textContent = on ? 'O‘chirish' : 'Ovoz';
+    }
+    function muteVideo(video){
+      if (!video) return;
+      video.muted = true;
+      setButtonState(video, false);
+    }
+    function muteOthers(except){
+      allBannerVideos().forEach(function(video){ if (video !== except) muteVideo(video); });
+    }
+    function playWithSound(video){
+      if (!video) return;
+      muteOthers(video);
+      video.muted = false;
+      video.defaultMuted = false;
+      video.volume = 1;
+      video.loop = true;
+      video.playsInline = true;
+      video.setAttribute('playsinline', '');
+      localStorage.setItem(audioKey, 'on');
+      localStorage.setItem(activeKey, videoId(video));
+      var p = video.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(function(){
           video.muted = true;
-        }
-        if (btn) {
-          btn.classList.toggle('active', shouldPlayAudio);
-          var icon = $('.az-bn-audio-icon', btn);
-          var label = $('.az-bn-audio-label', btn);
-          if (icon) icon.textContent = shouldPlayAudio ? '🔊' : '🔇';
-          if (label) label.textContent = shouldPlayAudio ? 'O‘chirish' : 'Ovoz';
-        }
-      });
+          setButtonState(video, false);
+        });
+      }
+      setButtonState(video, true);
+    }
+    function syncAudio(){
+      var audioOn = localStorage.getItem(audioKey) === 'on';
+      var activeId = localStorage.getItem(activeKey) || '';
+      var visibleVideos = allBannerVideos().filter(isVisible);
+      if (!audioOn) {
+        allBannerVideos().forEach(muteVideo);
+        return;
+      }
+      var preferred = visibleVideos.find(function(video){ return videoId(video) === activeId; }) || visibleVideos[0] || null;
+      if (!preferred) {
+        allBannerVideos().forEach(muteVideo);
+        return;
+      }
+      playWithSound(preferred);
+      allBannerVideos().forEach(function(video){ if (video !== preferred) muteVideo(video); });
     }
 
-    window.azuraRefreshBannerAudio = updateBannerAudioButtons;
-    updateBannerAudioButtons();
+    window._azBnToggleAudio = function(btn){
+      var video = btn && btn.closest ? btn.closest('.az-bn-video-wrap').querySelector('video') : null;
+      if (!video) return;
+      var turnOn = video.muted || localStorage.getItem(audioKey) !== 'on';
+      if (turnOn) {
+        playWithSound(video);
+      } else {
+        localStorage.setItem(audioKey, 'off');
+        localStorage.removeItem(activeKey);
+        muteVideo(video);
+      }
+      syncAudio();
+    };
 
-    var mo = new MutationObserver(debounce(updateBannerAudioButtons, 120));
+    document.addEventListener('click', function(e){
+      var btn = e.target.closest('.az-bn-audio-btn');
+      if (!btn) return;
+      e.stopPropagation();
+      e.preventDefault();
+      window._azBnToggleAudio(btn);
+    }, true);
+
+    ['scroll','resize','visibilitychange'].forEach(function(evt){
+      window.addEventListener(evt, debounce(syncAudio, 90), { passive:true });
+    });
+    document.addEventListener('visibilitychange', function(){ if (!document.hidden) syncAudio(); });
+
+    var mo = new MutationObserver(debounce(syncAudio, 120));
     mo.observe(document.documentElement, { childList:true, subtree:true });
+
+    window.azuraRefreshBannerAudio = syncAudio;
+    syncAudio();
   }
+
 
   function ensureProfileModal(){
     if ($('#az-account-modal')) return;

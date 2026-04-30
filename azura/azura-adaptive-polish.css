@@ -556,3 +556,34 @@ body.az-device-mobile #azura-cloud-sync{
     padding: 16px;
   }
 }
+
+.az-owner-login-helper{
+  margin-top: 12px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:10px 12px;
+  border-radius:16px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.06);
+}
+.az-owner-login-helper span{
+  font-weight:800;
+  color:var(--gold-light);
+}
+.az-owner-login-helper code{
+  padding:4px 8px;
+  border-radius:999px;
+  background:rgba(255,255,255,.06);
+}
+.az-owner-login-helper button{
+  margin-left:auto;
+  border:0;
+  border-radius:12px;
+  padding:8px 10px;
+  background:linear-gradient(135deg,#78f5ff,#8b7bff);
+  color:#09111a;
+  font-weight:900;
+  cursor:pointer;
+}

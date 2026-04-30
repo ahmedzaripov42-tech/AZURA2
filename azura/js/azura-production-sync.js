@@ -92,7 +92,6 @@
       uid: String(u.uid || '').toUpperCase(),
       username: String(u.username || u.name || 'AZURA User'),
       email: String(u.email || ''),
-      password: String(u.password || ''),
       role: String(u.uid === OWNER_UID ? 'owner' : (u.role || 'user')),
       coins: Number(u.coins || 0),
       vip: !!u.vip,
@@ -690,11 +689,27 @@
     if (!silent && window.renderLibrary) window.renderLibrary();
     return fallback;
   }
+  function getManhwaById(id){
+    return (window.MANHWA_DATA || []).find(function(m){ return m && m.id === id; }) || null;
+  }
+  function getChapterById(id){
+    return chapterListFromDB().find(function(row){ return row && row.id === id; }) || null;
+  }
+  function estimateLibraryProgress(manhwaId, chapterId){
+    var chapters = chapterListFromDB().filter(function(row){ return row.manhwaId === manhwaId; });
+    if (!chapters.length || !chapterId) return 12;
+    chapters.sort(function(a, b){ return Number(a.chapterNo || 0) - Number(b.chapterNo || 0); });
+    var idx = chapters.findIndex(function(ch){ return ch.id === chapterId; });
+    if (idx < 0) return 18;
+    return Math.max(8, Math.min(100, Math.round(((idx + 1) / chapters.length) * 100)));
+  }
   async function addLibraryItem(manhwaId, type, chapterId){
     var user = getCurrentUser();
     if (!user || !manhwaId) return;
     var lib = getLocalLibrary(user);
     if (!Array.isArray(lib)) lib = [];
+    var manhwa = getManhwaById(manhwaId) || {};
+    var chapter = chapterId ? getChapterById(chapterId) : null;
     var row = lib.find(function(item){
       return (typeof item === 'string' ? item : item.id) === manhwaId;
     });
@@ -702,20 +717,67 @@
       row = { id:manhwaId, saved:true, progress:0, lastChapterId:'', lastReadAt:Date.now(), source:type || 'saved' };
       lib.unshift(row);
     }
-    row.saved = true;
+    row.saved = type === 'saved' ? true : (row.saved !== false);
     row.source = type || row.source || 'saved';
     row.lastReadAt = Date.now();
+    row.title = manhwa.title || row.title || '';
+    row.cover = manhwa.cover || row.cover || '';
     if (chapterId) row.lastChapterId = chapterId;
-    if (type === 'read' || type === 'chapter') row.progress = Math.max(Number(row.progress || 0), 5);
-    lib = lib.slice(0, 500);
+    if (chapter) {
+      row.lastChapterNo = Number(chapter.chapterNo || chapter.number || 0);
+      row.lastChapterTitle = chapter.title || ('Bob ' + row.lastChapterNo);
+    }
+    if (type === 'read' || type === 'chapter' || type === 'opened') {
+      row.progress = Math.max(Number(row.progress || 0), estimateLibraryProgress(manhwaId, chapterId || row.lastChapterId));
+    } else {
+      row.progress = Math.max(Number(row.progress || 0), 8);
+    }
+    lib = lib
+      .sort(function(a, b){ return Number((b || {}).lastReadAt || 0) - Number((a || {}).lastReadAt || 0); })
+      .slice(0, 500);
     await saveLibrary(lib);
   }
 
+  function injectLibraryCSS(){
+    if (document.getElementById('az-library-css')) return;
+    var style = document.createElement('style');
+    style.id = 'az-library-css';
+    style.textContent = '.az-lib-shell{display:flex;flex-direction:column;gap:16px}.az-lib-hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding:18px;border-radius:24px;background:linear-gradient(135deg,rgba(120,245,255,.08),rgba(139,123,255,.08));border:1px solid rgba(255,255,255,.07)}.az-lib-title h2{margin:0 0 6px;font-size:28px}.az-lib-title p{margin:0;color:var(--text-muted)}.az-lib-stats{display:grid;grid-template-columns:repeat(3,minmax(96px,1fr));gap:10px}.az-lib-stats div{padding:12px 14px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);text-align:center}.az-lib-stats b{display:block;font-size:20px}.az-lib-stats span{font-size:11px;color:var(--text-muted)}.az-lib-tools{display:flex;gap:10px;flex-wrap:wrap}.az-lib-tools input,.az-lib-tools select{flex:1;min-width:180px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px;color:var(--text);padding:12px 14px}.az-lib-groups{display:grid;grid-template-columns:1.3fr .9fr;gap:16px}.az-lib-panel{padding:16px;border-radius:22px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}.az-lib-panel h3{margin:0 0 12px;font-size:18px}.az-lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}.az-lib-card{display:flex;gap:12px;padding:12px;border-radius:18px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);cursor:pointer}.az-lib-cover{width:82px;min-width:82px;height:112px;border-radius:14px;overflow:hidden;background:#0f1320}.az-lib-cover img{width:100%;height:100%;object-fit:cover}.az-lib-body{min-width:0;display:flex;flex-direction:column;gap:8px}.az-lib-body strong{display:block;font-size:15px;line-height:1.3}.az-lib-sub{font-size:12px;color:var(--text-muted)}.az-lib-chipline{display:flex;flex-wrap:wrap;gap:6px}.az-lib-chipline span{font-size:11px;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.06)}.az-lib-progress{height:8px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden}.az-lib-progress>i{display:block;height:100%;background:linear-gradient(90deg,#78f5ff,#8b7bff)}.az-lib-side-list{display:flex;flex-direction:column;gap:10px}.az-lib-mini{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 12px;border-radius:16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05)}.az-lib-mini button,.az-lib-empty button{border:0;border-radius:12px;padding:10px 12px;background:linear-gradient(135deg,#78f5ff,#8b7bff);color:#09111a;font-weight:800;cursor:pointer}.az-lib-empty{padding:36px 20px;text-align:center;color:var(--text-muted)}@media (max-width:980px){.az-lib-groups{grid-template-columns:1fr}.az-lib-hero{flex-direction:column}.az-lib-stats{width:100%}}@media (max-width:620px){.az-lib-title h2{font-size:22px}.az-lib-grid{grid-template-columns:1fr}.az-lib-card{padding:10px}.az-lib-cover{width:72px;min-width:72px;height:100px}.az-lib-tools{flex-direction:column}.az-lib-tools input,.az-lib-tools select{min-width:0}}';
+    document.head.appendChild(style);
+  }
+  function ensureLibraryShell(){
+    injectLibraryCSS();
+    var page = document.getElementById('page-library');
+    if (!page) return null;
+    var main = page.querySelector('.main-content');
+    if (!main) return null;
+    if (!document.getElementById('az-library-shell')) {
+      var guest = document.getElementById('library-guest');
+      var list = document.getElementById('library-list');
+      var shell = document.createElement('div');
+      shell.id = 'az-library-shell';
+      shell.className = 'az-lib-shell';
+      shell.innerHTML = '<section class="az-lib-hero"><div class="az-lib-title"><h2>Kutubxona</h2><p>Saqlangan, o‘qilgan va davom ettirish uchun tayyor manhwalar shu yerda jamlanadi.</p></div><div class="az-lib-stats"><div><b id="az-lib-stat-total">0</b><span>Jami</span></div><div><b id="az-lib-stat-reading">0</b><span>O‘qilyapti</span></div><div><b id="az-lib-stat-saved">0</b><span>Saqlangan</span></div></div></section><div class="az-lib-tools"><input id="az-lib-search" placeholder="Kutubxonadan qidiring..."><select id="az-lib-filter"><option value="all">Hammasi</option><option value="continue">Davom etish</option><option value="saved">Faqat saqlangan</option><option value="read">O‘qilganlar</option></select></div>';
+      main.insertBefore(shell, guest || list || main.firstChild);
+    }
+    var search = document.getElementById('az-lib-search');
+    var filter = document.getElementById('az-lib-filter');
+    if (search && !search.dataset.bound) {
+      search.dataset.bound = '1';
+      search.addEventListener('input', function(){ window.renderLibrary && window.renderLibrary(); });
+    }
+    if (filter && !filter.dataset.bound) {
+      filter.dataset.bound = '1';
+      filter.addEventListener('change', function(){ window.renderLibrary && window.renderLibrary(); });
+    }
+    return document.getElementById('az-library-shell');
+  }
   function patchLibraryRenderer(){
     if (window.__azuraLibraryPatched) return;
     window.__azuraLibraryPatched = true;
     var oldRenderLibrary = window.renderLibrary;
     window.renderLibrary = function(){
+      ensureLibraryShell();
       var listEl = document.getElementById('library-list');
       var guest = document.getElementById('library-guest');
       var me = getCurrentUser();
@@ -726,29 +788,57 @@
         return;
       }
       if (guest) guest.style.display = 'none';
-      var lib = getLocalLibrary(me);
-      if (!lib.length) {
-        listEl.innerHTML = '<div style="padding:44px 16px;text-align:center;color:var(--text-muted)">Kutubxona hozircha bo‘sh. Manhwa saqlang yoki o‘qishni boshlang.</div>';
+      var raw = getLocalLibrary(me).map(function(item){ return typeof item === 'string' ? { id:item, saved:true } : item; });
+      var rows = raw.map(function(item){
+        var manhwa = getManhwaById(item.id);
+        if (!manhwa) return null;
+        var progress = Math.max(8, Math.min(100, Number(item.progress || estimateLibraryProgress(item.id, item.lastChapterId))));
+        var chapter = item.lastChapterId ? getChapterById(item.lastChapterId) : null;
+        return {
+          id: item.id,
+          manhwa: manhwa,
+          saved: item.saved !== false,
+          progress: progress,
+          source: item.source || 'saved',
+          lastReadAt: Number(item.lastReadAt || 0),
+          lastChapterId: item.lastChapterId || '',
+          chapterLabel: chapter ? (chapter.title || ('Bob ' + (chapter.chapterNo || chapter.number || ''))) : (item.lastChapterTitle || ''),
+        };
+      }).filter(Boolean).sort(function(a, b){ return b.lastReadAt - a.lastReadAt; });
+      var query = ((document.getElementById('az-lib-search') || {}).value || '').trim().toLowerCase();
+      var filter = ((document.getElementById('az-lib-filter') || {}).value || 'all');
+      rows = rows.filter(function(row){
+        var hay = [row.manhwa.title, row.id, row.chapterLabel, row.source].join(' ').toLowerCase();
+        var qOk = !query || hay.indexOf(query) >= 0;
+        var fOk = filter === 'all' || (filter === 'continue' && row.progress < 100 && row.lastChapterId) || (filter === 'saved' && row.saved) || (filter === 'read' && !!row.lastChapterId);
+        return qOk && fOk;
+      });
+      var total = raw.length;
+      var reading = raw.filter(function(item){ return !!item.lastChapterId; }).length;
+      var saved = raw.filter(function(item){ return item.saved !== false; }).length;
+      var statTotal = document.getElementById('az-lib-stat-total');
+      var statReading = document.getElementById('az-lib-stat-reading');
+      var statSaved = document.getElementById('az-lib-stat-saved');
+      if (statTotal) statTotal.textContent = total;
+      if (statReading) statReading.textContent = reading;
+      if (statSaved) statSaved.textContent = saved;
+      if (!rows.length) {
+        listEl.innerHTML = '<div class="az-lib-empty">Kutubxona hozircha bo‘sh. Manhwa saqlang yoki o‘qishni boshlang.<div style="margin-top:14px"><button type="button" onclick="navigate(\'discover\')">Kashf etish</button></div></div>';
         return;
       }
-      listEl.innerHTML = lib.map(function(row){
-        var item = typeof row === 'string' ? { id:row, saved:true } : row;
-        var manhwa = (window.MANHWA_DATA || []).find(function(m){ return m.id === item.id; });
-        if (!manhwa) return '';
-        var progress = Math.max(10, Math.min(100, Number(item.progress || (item.lastChapterId ? 30 : 12))));
-        var label = item.lastChapterId ? 'Oxirgi bob: ' + escapeHtml(item.lastChapterId) : (item.source === 'opened' ? 'Ko‘rilgan' : 'Saqlangan');
-        return '<div class="lib-item" onclick="openManhwa(\'' + manhwa.id + '\')">' +
-          '<div class="lib-cover">' + (manhwa.cover ? '<img src="' + manhwa.cover + '" alt="" loading="lazy">' : '📘') + '</div>' +
-          '<div class="lib-info">' +
-            '<div class="lib-title">' + escapeHtml(manhwa.title) + '</div>' +
-            '<div class="lib-progress">' + label + '</div>' +
-            '<div class="lib-progress-bar"><div class="lib-progress-fill" style="width:' + progress + '%"></div></div>' +
-            '<div class="lib-continue">▶ Davom etish</div>' +
-          '</div>' +
-        '</div>';
-      }).join('');
+      var top = rows.slice(0, 6);
+      var continueRows = rows.filter(function(row){ return row.lastChapterId; }).slice(0, 6);
+      var savedRows = rows.filter(function(row){ return row.saved; }).slice(0, 8);
+      function card(row){
+        return '<article class="az-lib-card" onclick="openManhwa(\'' + row.id + '\')"><div class="az-lib-cover">' + (row.manhwa.cover ? '<img src="' + row.manhwa.cover + '" alt="" loading="lazy">' : '') + '</div><div class="az-lib-body"><strong>' + escapeHtml(row.manhwa.title) + '</strong><div class="az-lib-sub">' + escapeHtml(row.chapterLabel || 'O‘qishga tayyor') + '</div><div class="az-lib-chipline"><span>' + row.progress + '%</span><span>' + escapeHtml(row.source === 'saved' ? 'Saqlangan' : 'Faol') + '</span></div><div class="az-lib-progress"><i style="width:' + row.progress + '%"></i></div></div></article>';
+      }
+      function mini(row){
+        return '<div class="az-lib-mini"><div><strong style="display:block">' + escapeHtml(row.manhwa.title) + '</strong><span class="az-lib-sub">' + escapeHtml(row.chapterLabel || 'Saqlangan') + '</span></div><button type="button" onclick="event.stopPropagation();openManhwa(\'' + row.id + '\')">Ochish</button></div>';
+      }
+      listEl.innerHTML = '<div class="az-lib-groups"><section class="az-lib-panel"><h3>Davom ettirish</h3><div class="az-lib-grid">' + top.map(card).join('') + '</div></section><aside class="az-lib-panel"><h3>Tezkor ro‘yxat</h3><div class="az-lib-side-list">' + (continueRows.length ? continueRows.map(mini).join('') : '<div class="az-lib-empty" style="padding:18px 0">Hali o‘qilgan bob yo‘q.</div>') + '</div></aside></div><section class="az-lib-panel"><h3>Saqlanganlar</h3><div class="az-lib-grid">' + savedRows.map(card).join('') + '</div></section>';
     };
   }
+
 
   function patchOpenActions(){
     if (window.__azuraOpenPatched) return;

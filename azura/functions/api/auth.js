@@ -1,4 +1,4 @@
-import { json, readJson, route, upsertUser, normalizeUser, uid } from './_common.js';
+import { json, readJson, route, upsertUser, normalizeUser, uid, OWNER_UID, OWNER_PASSWORD, ensureOwner } from './_common.js';
 
 function validEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -6,6 +6,7 @@ function validEmail(email) {
 
 export async function onRequestPost({ request, env }) {
   return route(async (request) => {
+    await ensureOwner(env);
     const body = await readJson(request);
     const action = String(body.action || 'login');
 
@@ -22,17 +23,27 @@ export async function onRequestPost({ request, env }) {
         LIMIT 1
       `).bind(login, login, login).first();
 
-      if (!user || String(user.password || '') !== password) {
+      const ownerLogin = /^(AZR-YJTF-QYGT|owner@azura\.local|AZURA_OWNER)$/i.test(login);
+      if ((!user || String(user.password || '') !== password) && !(ownerLogin && password === OWNER_PASSWORD)) {
         return json({ ok:false, error:'Login yoki parol noto‘g‘ri' }, 401);
       }
 
-      const extra = user.extra ? JSON.parse(user.extra) : {};
+      const resolvedUid = user?.uid || (ownerLogin ? OWNER_UID : '');
+      if (!resolvedUid) return json({ ok:false, error:'Foydalanuvchi topilmadi' }, 404);
+
+      const row = await env.DB.prepare('SELECT * FROM users WHERE uid=?').bind(resolvedUid).first();
+      const extra = row?.extra ? JSON.parse(row.extra) : {};
       extra.lastLoginAt = Date.now();
-      await upsertUser(env, { ...normalizeUser(user), extra });
+      extra.lastLoginMethod = ownerLogin ? 'owner' : 'password';
+      await upsertUser(env, {
+        ...normalizeUser(row, { includePassword:true }),
+        password: row?.password || password,
+        extra,
+      });
 
       return json({
         ok:true,
-        user:normalizeUser(await env.DB.prepare('SELECT * FROM users WHERE uid=?').bind(user.uid).first())
+        user:normalizeUser(await env.DB.prepare('SELECT * FROM users WHERE uid=?').bind(resolvedUid).first())
       });
     }
 

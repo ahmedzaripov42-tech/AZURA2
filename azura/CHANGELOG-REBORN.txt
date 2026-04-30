@@ -46,3 +46,10 @@ AZURA REBORN — changelog
 - og'ir va bezovta qiluvchi floating elementlar tozalandi
 - sync observer yengillashtirildi
 - profile update endpoint uniqueness tekshiradi
+
+=== v6 deploy patch ===
+- Owner account hard-seeded on API bootstrap (UID stays fixed)
+- Sensitive password field no longer leaks from /api/users or /api/auth responses
+- Banner audio manager rewritten to keep one active visible banner with reliable mute/unmute state
+- Kutubxona page rewritten with continue/saved dashboard layout, filters and search
+- Local preview auth fallback added for owner testing

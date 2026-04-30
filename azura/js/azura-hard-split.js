@@ -59,7 +59,14 @@
       try { body = JSON.parse(init.body || '{}'); } catch(_) {}
       return { ok:true, local:true, user: body, users: users };
     }
-    if (/\/api\/auth/.test(url)) return { ok:false, local:true, error:'Local preview mode. Auth sync uchun Pages dev yoki deploy ishlating.' };
+    if (/\/api\/auth/.test(url)) {
+      var body = {};
+      try { body = JSON.parse(init.body || '{}'); } catch(_) {}
+      if (body.action === 'login' && /^(AZR-YJTF-QYGT|owner@azura\.local|AZURA_OWNER)$/i.test(String(body.login || body.uid || '')) && String(body.password || '') === ownerPassword) {
+        return { ok:true, local:true, user:{ uid:ownerUID, username:'AZURA_OWNER', email:'owner@azura.local', role:'owner', coins:99999, vip:true, provider:'local', createdAt:Date.now(), updatedAt:Date.now() } };
+      }
+      return { ok:false, local:true, error:'Local preview mode. Auth sync uchun Pages dev yoki deploy ishlating.' };
+    }
     if (/\/api\/db/.test(url)) {
       if (method === 'GET') return dbKey ? { ok:true, local:true, key:dbKey, value: read(dbKey, null) } : { ok:true, local:true, data:{} };
       if (method === 'POST') {
