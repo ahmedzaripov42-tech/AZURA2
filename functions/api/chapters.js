@@ -17,29 +17,14 @@ async function ensureChapterSchema(DB) {
     extra TEXT
   )`).run();
   await DB.prepare(`CREATE INDEX IF NOT EXISTS idx_chapters_manhwa ON chapters(manhwaId)`).run();
-  await DB.prepare(`CREATE INDEX IF NOT EXISTS idx_chapters_no ON chapters(chapterNo)`).run();
 }
 
 function norm(row) {
   if (!row) return null;
-  let pages = [];
-  let extra = {};
+  let pages = [], extra = {};
   try { pages = row.pages ? JSON.parse(row.pages) : []; } catch (_) {}
   try { extra = row.extra ? JSON.parse(row.extra) : {}; } catch (_) {}
-  return {
-    ...extra,
-    id: row.id,
-    manhwaId: row.manhwaId,
-    title: row.title || "",
-    chapterNo: Number(row.chapterNo || 0),
-    pages,
-    accessType: row.accessType || "free",
-    price: Number(row.price || 0),
-    vip: !!row.vip,
-    status: row.status || "published",
-    createdAt: Number(row.createdAt || 0),
-    updatedAt: Number(row.updatedAt || 0)
-  };
+  return { ...extra, id: row.id, manhwaId: row.manhwaId, title: row.title || "", chapterNo: Number(row.chapterNo || 0), pages, accessType: row.accessType || "free", price: Number(row.price || 0), vip: !!row.vip, status: row.status || "published", createdAt: Number(row.createdAt || 0), updatedAt: Number(row.updatedAt || 0) };
 }
 
 function makeId(manhwaId, chapterNo) {
@@ -51,17 +36,15 @@ export async function onRequest({ request, env }) {
   try {
     if (!env.DB) return json({ ok:false, error:"DB binding missing. Binding name must be DB." }, 500);
     await ensureChapterSchema(env.DB);
-
     const url = new URL(request.url);
 
     if (request.method === "GET") {
       const manhwaId = url.searchParams.get("manhwaId");
       if (manhwaId) {
-        const rows = await env.DB.prepare("SELECT * FROM chapters WHERE manhwaId=? ORDER BY chapterNo ASC, createdAt ASC")
-          .bind(manhwaId).all();
+        const rows = await env.DB.prepare("SELECT * FROM chapters WHERE manhwaId=? ORDER BY chapterNo ASC, createdAt ASC").bind(manhwaId).all();
         return json({ ok:true, chapters:(rows.results || []).map(norm) });
       }
-      const rows = await env.DB.prepare("SELECT * FROM chapters ORDER BY updatedAt DESC LIMIT 2000").all();
+      const rows = await env.DB.prepare("SELECT * FROM chapters ORDER BY updatedAt DESC LIMIT 3000").all();
       return json({ ok:true, chapters:(rows.results || []).map(norm) });
     }
 
@@ -72,35 +55,12 @@ export async function onRequest({ request, env }) {
       for (const c of list) {
         if (!c || !c.manhwaId) continue;
         const t = Date.now();
-        const id = String(c.id || makeId(c.manhwaId, c.chapterNo)).trim();
+        const id = String(c.id || makeId(c.manhwaId, c.chapterNo || c.number)).trim();
         await env.DB.prepare(`
           INSERT INTO chapters (id, manhwaId, title, chapterNo, pages, accessType, price, vip, status, createdAt, updatedAt, extra)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET
-            manhwaId=excluded.manhwaId,
-            title=excluded.title,
-            chapterNo=excluded.chapterNo,
-            pages=excluded.pages,
-            accessType=excluded.accessType,
-            price=excluded.price,
-            vip=excluded.vip,
-            status=excluded.status,
-            updatedAt=excluded.updatedAt,
-            extra=excluded.extra
-        `).bind(
-          id,
-          String(c.manhwaId),
-          String(c.title || c.name || ("Bob " + (c.chapterNo || ""))),
-          Number(c.chapterNo || c.number || 0),
-          JSON.stringify(c.pages || c.images || []),
-          String(c.accessType || c.access || "free"),
-          Number(c.price || c.coin || 0),
-          c.vip ? 1 : 0,
-          String(c.status || "published"),
-          Number(c.createdAt || t),
-          t,
-          JSON.stringify(c.extra || {})
-        ).run();
+          ON CONFLICT(id) DO UPDATE SET manhwaId=excluded.manhwaId,title=excluded.title,chapterNo=excluded.chapterNo,pages=excluded.pages,accessType=excluded.accessType,price=excluded.price,vip=excluded.vip,status=excluded.status,updatedAt=excluded.updatedAt,extra=excluded.extra
+        `).bind(id, String(c.manhwaId), String(c.title || c.name || ("Bob " + (c.chapterNo || c.number || ""))), Number(c.chapterNo || c.number || c.no || 0), JSON.stringify(c.pages || c.images || c.pageImages || []), String(c.accessType || c.access || "free"), Number(c.price || c.coin || c.coinPrice || 0), c.vip || c.vipOnly ? 1 : 0, String(c.status || "published"), Number(c.createdAt || t), t, JSON.stringify(c.extra || {})).run();
         saved.push(norm(await env.DB.prepare("SELECT * FROM chapters WHERE id=?").bind(id).first()));
       }
       return json({ ok:true, chapters:saved });
