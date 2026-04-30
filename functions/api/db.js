@@ -49,10 +49,6 @@ export async function onRequest({ request, env }) {
 
     return json({ ok: false, error: "Method not allowed" }, 405);
   } catch (err) {
-    return json({
-      ok: false,
-      error: "App data API error",
-      message: String(err && err.message ? err.message : err)
-    }, 500);
+    return json({ ok: false, error: "App data API error", message: String(err && err.message ? err.message : err) }, 500);
   }
 }
