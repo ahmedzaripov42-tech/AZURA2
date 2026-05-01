@@ -5,12 +5,16 @@
   var OWNER_UID = 'AZR-YJTF-QYGT';
   var USER_CACHE_KEY = 'azura_users';
   var CURRENT_KEYS = ['azura_current', 'azura_current_user'];
+  var SESSION_TOKEN_KEY = 'azura_session_token';
   var LIB_PREFIX = 'user_library_';
+  var ADULT_CONTENT_KEY = 'azura_adult_content';
   var optimizeTimer = 0;
   var syncButtonState = { moved:false, x:0, y:0 };
   var IS_LOCAL_FILE = location.protocol === 'file:';
   var API_ONLINE = /^https?:$/.test(location.protocol);
   var apiWarned = false;
+  var fullSyncPromise = null;
+  var bootstrapRan = false;
 
   function parseJSON(v, fallback){
     try { return JSON.parse(v); } catch(_) { return fallback; }
@@ -29,6 +33,13 @@
   function removeLS(key){
     try { localStorage.removeItem(key); } catch(_) {}
   }
+  function getSessionToken(){
+    return String(localStorage.getItem(SESSION_TOKEN_KEY) || '');
+  }
+  function setSessionToken(token){
+    if (token) localStorage.setItem(SESSION_TOKEN_KEY, token);
+    else removeLS(SESSION_TOKEN_KEY);
+  }
   function toast(msg, kind){
     if (window.showToast) return window.showToast(msg, kind || 'gold');
     console.log('[AZURA]', msg);
@@ -36,37 +47,194 @@
   function apiOfflineResult(url, options){
     options = options || {};
     var method = String(options.method || 'GET').toUpperCase();
+    var now = Date.now();
+    var users = getLS(USER_CACHE_KEY, []) || [];
+    var current = getCurrentUser();
+    var localToken = localStorage.getItem(SESSION_TOKEN_KEY) || '';
     if (!apiWarned) {
       apiWarned = true;
       console.info('[AZURA] Local file mode: Cloudflare /api endpoints are disabled. Use deployed site or local Pages dev server for D1/R2.');
     }
+
+    function ensureLocalOwner(){
+      var idx = users.findIndex(function(u){ return String((u || {}).uid || '').toUpperCase() === OWNER_UID; });
+      if (idx < 0) {
+        users.unshift({
+          uid: OWNER_UID,
+          username: 'AZURA_OWNER',
+          email: 'owner@azura.local',
+          role: 'owner',
+          coins: 99999,
+          vip: true,
+          provider: 'local',
+          createdAt: now,
+          updatedAt: now,
+          extra: { bio:'', theme:'auto', telegram:'' }
+        });
+        setLS(USER_CACHE_KEY, users);
+      }
+    }
+    function saveUsersLocal(list){
+      setLS(USER_CACHE_KEY, list || []);
+      return list || [];
+    }
+    function matchUser(login){
+      var lookup = String(login || '').trim().toLowerCase();
+      return (users || []).find(function(u){
+        return String(u.uid || '').toLowerCase() === lookup
+          || String(u.email || '').toLowerCase() === lookup
+          || String(u.username || '').toLowerCase() === lookup;
+      }) || null;
+    }
+    function userRole(user){
+      if (!user) return 'guest';
+      if (String(user.uid || '').toUpperCase() === OWNER_UID) return 'owner';
+      return user.role || 'user';
+    }
+    function publicUser(user){
+      if (!user) return null;
+      var clone = JSON.parse(JSON.stringify(user));
+      delete clone.password;
+      return clone;
+    }
+    function persistCurrent(user){
+      syncCurrent(normUser(user));
+      localStorage.setItem(SESSION_TOKEN_KEY, 'local_' + String((user || {}).uid || '').toUpperCase());
+    }
+
+    ensureLocalOwner();
+    users = getLS(USER_CACHE_KEY, []) || [];
+
     if (url.indexOf('/api/init') === 0 || url.indexOf('/api/health') === 0) {
-      return { ok:true, local:true, db:false, users:(getLS(USER_CACHE_KEY, [])||[]).length, time:Date.now() };
+      return { ok:true, local:true, db:false, users:users.length, time:now };
+    }
+    if (url.indexOf('/api/auth') === 0) {
+      if (method === 'GET') {
+        if (!current) return { ok:false, local:true, error:'Sessiya topilmadi' };
+        return { ok:true, local:true, user:publicUser(normUser(current)), expiresAt:now + 86400000 };
+      }
+      var body = parseJSON(options.body || '{}', {});
+      if (body.action === 'logout') {
+        removeLS(SESSION_TOKEN_KEY);
+        return { ok:true, local:true };
+      }
+      if (body.action === 'login') {
+        var login = body.login || body.uid || body.email || body.username || '';
+        var password = String(body.password || '');
+        var ownerHit = /^(AZR-YJTF-QYGT|owner@azura\.local|AZURA_OWNER)$/i.test(String(login || ''));
+        if (ownerHit && password === 'azura2025owner') {
+          var owner = matchUser(OWNER_UID) || {
+            uid: OWNER_UID,
+            username: 'AZURA_OWNER',
+            email: 'owner@azura.local',
+            role: 'owner',
+            coins: 99999,
+            vip: true,
+            provider: 'local',
+            createdAt: now,
+            updatedAt: now,
+            extra: { bio:'', theme:'auto', telegram:'' }
+          };
+          persistCurrent(owner);
+          return { ok:true, local:true, user:publicUser(normUser(owner)), sessionToken:localStorage.getItem(SESSION_TOKEN_KEY), expiresAt:now + 86400000 };
+        }
+        var found = matchUser(login);
+        if (!found || String(found.password || '') !== password) {
+          return { ok:false, local:true, error:'Login yoki parol noto‘g‘ri' };
+        }
+        persistCurrent(found);
+        return { ok:true, local:true, user:publicUser(normUser(found)), sessionToken:localStorage.getItem(SESSION_TOKEN_KEY), expiresAt:now + 86400000 };
+      }
+      if (body.action === 'register') {
+        var username = String(body.username || body.name || '').trim();
+        var email = String(body.email || '').trim();
+        if ((users || []).some(function(u){ return String(u.username || '').toLowerCase() === username.toLowerCase(); })) {
+          return { ok:false, local:true, error:'Bu foydalanuvchi nomi band' };
+        }
+        if (email && (users || []).some(function(u){ return String(u.email || '').toLowerCase() === email.toLowerCase(); })) {
+          return { ok:false, local:true, error:'Bu email allaqachon mavjud' };
+        }
+        var created = normUser({
+          uid: 'AZR-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
+          username: username || 'AZURA_User',
+          email: email,
+          password: String(body.password || ''),
+          role: 'user',
+          coins: Number(body.coins || 50),
+          vip: false,
+          provider: 'local',
+          createdAt: now,
+          updatedAt: now,
+          extra: { bio:'', theme:'auto', telegram:'' }
+        });
+        users.push(created);
+        saveUsersLocal(users);
+        persistCurrent(created);
+        return { ok:true, local:true, user:publicUser(created), sessionToken:localStorage.getItem(SESSION_TOKEN_KEY), expiresAt:now + 86400000 };
+      }
+      if (body.action === 'social') {
+        var provider = String(body.provider || 'social');
+        var providerId = String(body.providerId || ('SOC-' + Math.random().toString(36).slice(2, 10).toUpperCase()));
+        var socialUid = body.uid || ('AZR-' + provider.toUpperCase().slice(0, 3) + '-' + providerId.slice(-6).toUpperCase());
+        var existing = matchUser(socialUid);
+        if (!existing) {
+          existing = normUser({
+            uid: socialUid,
+            username: body.username || (provider + '_' + providerId.slice(-5).toLowerCase()),
+            email: body.email || '',
+            role: 'user',
+            coins: Number(body.coins || 0),
+            vip: false,
+            provider: provider,
+            createdAt: now,
+            updatedAt: now,
+            extra: { providerId: providerId, bio:'', theme:'auto', telegram:'' }
+          });
+          users.push(existing);
+          saveUsersLocal(users);
+        }
+        persistCurrent(existing);
+        return { ok:true, local:true, user:publicUser(normUser(existing)), sessionToken:localStorage.getItem(SESSION_TOKEN_KEY), expiresAt:now + 86400000 };
+      }
+      return { ok:false, local:true, error:'Noma’lum auth action' };
     }
     if (url.indexOf('/api/users') === 0) {
-      if (method === 'GET') return { ok:true, local:true, users:getLS(USER_CACHE_KEY, []) || [] };
+      if (method === 'GET') return { ok:true, local:true, users:users.map(publicUser) };
       if (method === 'POST') {
         var u = parseJSON(options.body || '{}', {});
-        var users = getLS(USER_CACHE_KEY, []) || [];
-        var i = users.findIndex(function(x){ return String(x.uid).toUpperCase() === String(u.uid).toUpperCase(); });
+        var i = users.findIndex(function(x){ return String(x.uid || '').toUpperCase() === String(u.uid || '').toUpperCase(); });
         if (i >= 0) users[i] = Object.assign({}, users[i], u); else users.push(u);
-        setLS(USER_CACHE_KEY, users);
-        return { ok:true, local:true, user:u, users:users };
+        saveUsersLocal(users);
+        return { ok:true, local:true, user:publicUser(u), users:users.map(publicUser) };
       }
       if (method === 'PATCH') {
-        var body = parseJSON(options.body || '{}', {});
-        var list = getLS(USER_CACHE_KEY, []) || [];
-        var idx = list.findIndex(function(x){ return String(x.uid).toUpperCase() === String(body.uid).toUpperCase(); });
+        var bodyPatch = parseJSON(options.body || '{}', {});
+        var list = users.slice();
+        var idx = list.findIndex(function(x){ return String(x.uid || '').toUpperCase() === String(bodyPatch.uid || '').toUpperCase(); });
         if (idx >= 0) {
-          if (body.action === 'coins') list[idx].coins = Number(body.coins != null ? body.coins : body.value || 0);
-          if (body.action === 'vip') list[idx].vip = !!body.vip;
-          if (body.action === 'role' && list[idx].uid !== OWNER_UID) list[idx].role = body.role || 'user';
-          if (body.action === 'profile') Object.assign(list[idx], body.profile || {});
-          list[idx].updatedAt = Date.now();
-          setLS(USER_CACHE_KEY, list);
-          return { ok:true, local:true, user:list[idx], users:list };
+          if (bodyPatch.action === 'coins') list[idx].coins = Math.max(0, Number(bodyPatch.coins != null ? bodyPatch.coins : bodyPatch.value || 0));
+          if (bodyPatch.action === 'vip') list[idx].vip = !!bodyPatch.vip;
+          if (bodyPatch.action === 'role' && list[idx].uid !== OWNER_UID) list[idx].role = bodyPatch.role || 'user';
+          if (bodyPatch.action === 'profile') {
+            list[idx] = Object.assign({}, list[idx], bodyPatch.profile || {}, {
+              extra: Object.assign({}, list[idx].extra || {}, (bodyPatch.profile || {}).extra || {})
+            });
+          }
+          list[idx].updatedAt = now;
+          saveUsersLocal(list);
+          if (current && current.uid === list[idx].uid) persistCurrent(list[idx]);
+          return { ok:true, local:true, user:publicUser(list[idx]), users:list.map(publicUser) };
         }
-        return { ok:false, error:'User topilmadi' };
+        return { ok:false, local:true, error:'User topilmadi' };
+      }
+      if (method === 'DELETE') {
+        var uidMatch = /[?&]uid=([^&]+)/.exec(url || '');
+        var targetUid = uidMatch ? decodeURIComponent(uidMatch[1]).toUpperCase() : '';
+        if (!targetUid) return { ok:false, local:true, error:'uid kerak' };
+        if (targetUid === OWNER_UID) return { ok:false, local:true, error:'Owner o‘chirilmaydi' };
+        users = users.filter(function(u){ return String(u.uid || '').toUpperCase() !== targetUid; });
+        saveUsersLocal(users);
+        return { ok:true, local:true };
       }
       return { ok:true, local:true };
     }
@@ -74,7 +242,11 @@
       var keyMatch = /[?&]key=([^&]+)/.exec(url);
       var key = keyMatch ? decodeURIComponent(keyMatch[1]) : '';
       if (method === 'GET') return key ? { ok:true, local:true, key:key, value:getLS(key, null) } : { ok:true, local:true, data:{} };
-      if (method === 'POST') { var d=parseJSON(options.body||'{}',{}); setLS(d.key, d.value); return { ok:true, local:true, key:d.key, value:d.value }; }
+      if (method === 'POST') {
+        var d = parseJSON(options.body || '{}', {});
+        setLS(d.key, d.value);
+        return { ok:true, local:true, key:d.key, value:d.value };
+      }
     }
     if (url.indexOf('/api/chapters') === 0) return { ok:true, local:true, chapters:getLS('azura_chapters_pending', []) || [] };
     if (url.indexOf('/api/views') === 0) return { ok:true, local:true, views:getLS('azura_views_global_fallback', {}) || {}, id:'', count:0 };
@@ -97,6 +269,7 @@
       vip: !!u.vip,
       avatar: String(u.avatar || ''),
       provider: String(u.provider || 'local'),
+      extra: u.extra || {},
       createdAt: Number(u.createdAt || Date.now()),
       updatedAt: Number(u.updatedAt || Date.now())
     };
@@ -119,6 +292,73 @@
     window.currentUser = user;
     try { currentUser = user; } catch(_) {}
     CURRENT_KEYS.forEach(function(key){ setLS(key, user); });
+  }
+  function clearCurrent(){
+    CURRENT_KEYS.forEach(removeLS);
+    window.currentUser = null;
+    try { currentUser = null; } catch(_) {}
+  }
+  function isLocalBlobUrl(value){
+    return /^blob:/i.test(String(value || ''));
+  }
+  function dataUrlToBlob(dataUrl){
+    var parts = String(dataUrl || '').split(',');
+    var meta = parts[0] || '';
+    var mime = (meta.match(/data:([^;]+)/) || [,'application/octet-stream'])[1];
+    var bin = atob(parts[1] || '');
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }
+  function blobToDataUrl(blob){
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onload = function(){ resolve(String(reader.result || '')); };
+      reader.onerror = function(){ reject(reader.error || new Error('Blob read xatosi')); };
+      reader.readAsDataURL(blob);
+    });
+  }
+  async function uploadMediaReference(ref, options){
+    options = options || {};
+    if (!ref || /^\/api\/media\?key=/.test(ref) || /^https?:\/\//i.test(ref)) return ref || '';
+    if (String(ref).indexOf('data:') === 0) {
+      var blob = dataUrlToBlob(ref);
+      var file = new File([blob], sanitizeUploadName(options.filename || ('media_' + Date.now())), { type: blob.type || options.mime || 'application/octet-stream' });
+      var uploaded = await API.media({
+        file: file,
+        filename: options.filename || file.name,
+        folder: options.folder || 'uploads',
+        mime: blob.type || options.mime || 'application/octet-stream'
+      });
+      return uploaded.url || ref;
+    }
+    if (String(ref).indexOf('idb:') === 0 && window.BannerMediaStore && typeof window.BannerMediaStore.getUrl === 'function') {
+      var mediaId = String(ref).slice(4);
+      var blobUrl = await window.BannerMediaStore.getUrl(mediaId);
+      var response = await fetch(blobUrl);
+      var blobData = await response.blob();
+      var fileFromBlob = new File([blobData], sanitizeUploadName(options.filename || (mediaId + guessFileExtension(blobData.type))), { type: blobData.type || options.mime || 'application/octet-stream' });
+      var uploadedFromBlob = await API.media({
+        file: fileFromBlob,
+        filename: options.filename || fileFromBlob.name,
+        folder: options.folder || 'uploads',
+        mime: blobData.type || options.mime || 'application/octet-stream'
+      });
+      return uploadedFromBlob.url || ref;
+    }
+    return ref;
+  }
+  function guessFileExtension(mime){
+    if (!mime) return '';
+    if (/png/i.test(mime)) return '.png';
+    if (/webp/i.test(mime)) return '.webp';
+    if (/jpe?g/i.test(mime)) return '.jpg';
+    if (/mp4/i.test(mime)) return '.mp4';
+    if (/webm/i.test(mime)) return '.webm';
+    return '';
+  }
+  function sanitizeUploadName(name){
+    return String(name || 'media').replace(/[^a-zA-Z0-9._-]/g, '-');
   }
   function syncUsers(users){
     var list = (users || []).map(normUser).filter(function(u){ return u.uid; });
@@ -144,16 +384,41 @@
   var API = {
     async json(url, options){
       options = options || {};
-      options.headers = Object.assign({ 'content-type':'application/json' }, options.headers || {});
       if (!API_ONLINE) return apiOfflineResult(url, options);
-      var res = await fetch(url, options);
+
+      var headers = Object.assign({}, options.headers || {});
+      if (!(options.body instanceof FormData)) {
+        headers = Object.assign({ 'content-type':'application/json' }, headers);
+      }
+      var token = getSessionToken();
+      if (token) headers.authorization = 'Bearer ' + token;
+      options.headers = headers;
+
+      var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      var timeoutId = controller ? setTimeout(function(){ try { controller.abort('timeout'); } catch(_) {} }, 15000) : 0;
+      if (controller) options.signal = controller.signal;
+
+      var res;
+      try {
+        res = await fetch(url, options);
+      } catch (err) {
+        if (timeoutId) clearTimeout(timeoutId);
+        throw new Error((err && err.name === 'AbortError') ? 'So‘rov vaqti tugadi' : 'Tarmoq xatosi');
+      }
+      if (timeoutId) clearTimeout(timeoutId);
+
       var data = null;
       try { data = await res.json(); } catch(_) { data = { ok:false, error:'JSON parse error' }; }
-      if (!res.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + res.status));
+      if (!res.ok || data.ok === false) {
+        var msg = data.error || ('HTTP ' + res.status);
+        if (data.requestId) msg += ' [' + data.requestId + ']';
+        throw new Error(msg);
+      }
       return data;
     },
     init: function(){ return this.json('/api/init'); },
     health: function(){ return this.json('/api/health'); },
+    authCurrent: function(){ return this.json('/api/auth'); },
     auth: function(body){ return this.json('/api/auth', { method:'POST', body:JSON.stringify(body) }); },
     users: function(){ return this.json('/api/users'); },
     saveUser: function(user){ return this.json('/api/users', { method:'POST', body:JSON.stringify(user) }); },
@@ -163,14 +428,28 @@
     saveDB: function(key, value){ return this.json('/api/db', { method:'POST', body:JSON.stringify({ key:key, value:value, updatedAt:Date.now() }) }); },
     chapters: function(manhwaId){ return this.json('/api/chapters' + (manhwaId ? ('?manhwaId=' + encodeURIComponent(manhwaId)) : '')); },
     saveChapters: function(payload){ return this.json('/api/chapters', { method:'POST', body:JSON.stringify(payload) }); },
+    patchChapter: function(payload){ return this.json('/api/chapters', { method:'PATCH', body:JSON.stringify(payload) }); },
     deleteChapter: function(id){ return this.json('/api/chapters?id=' + encodeURIComponent(id), { method:'DELETE' }); },
     views: function(id){ return this.json('/api/views' + (id ? ('?id=' + encodeURIComponent(id)) : '')); },
     addView: function(id){ return this.json('/api/views?id=' + encodeURIComponent(id), { method:'POST' }); },
-    media: function(body){ return this.json('/api/media', { method:'POST', body:JSON.stringify(body) }); }
+    media: async function(body){
+      if (body instanceof FormData) return this.json('/api/media', { method:'POST', body:body });
+      if (body && body.file) {
+        var form = new FormData();
+        form.append('file', body.file, body.filename || body.file.name || 'media');
+        if (body.folder) form.append('folder', body.folder);
+        if (body.filename) form.append('filename', body.filename);
+        if (body.mime) form.append('mime', body.mime);
+        return this.json('/api/media', { method:'POST', body:form });
+      }
+      return this.json('/api/media', { method:'POST', body:JSON.stringify(body || {}) });
+    }
   };
   window.AZURA_API = API;
 
   async function pullUsers(){
+    var me = getCurrentUser();
+    if (!me || !isStaff(me)) return getLS(USER_CACHE_KEY, []);
     try {
       var data = await API.users();
       return syncUsers(data.users || []);
@@ -243,6 +522,7 @@
       setBusy(btn, true, 'Tekshirilmoqda…');
       try {
         var data = await API.auth({ action:'login', login:login, password:password });
+        setSessionToken(data.sessionToken || '');
         syncCurrent(normUser(data.user));
         await Promise.allSettled([pullUsers(), pullLibrary(true)]);
         if (window.closeAuth) window.closeAuth();
@@ -274,6 +554,7 @@
       setBusy(btn, true, 'Yaratilmoqda…');
       try {
         var data = await API.auth({ action:'register', username:username, email:email, password:password, coins:50 });
+        setSessionToken(data.sessionToken || '');
         syncCurrent(normUser(data.user));
         await Promise.allSettled([pullUsers(), pullLibrary(true)]);
         var idBox = document.getElementById('new-id-box');
@@ -320,6 +601,7 @@
           email: '',
           coins: 0
         });
+        setSessionToken(data.sessionToken || '');
         syncCurrent(normUser(data.user));
         await Promise.allSettled([pullUsers(), pullLibrary(true)]);
         if (window.closeAuth) window.closeAuth();
@@ -335,9 +617,9 @@
     };
 
     window.doLogout = function(){
-      CURRENT_KEYS.forEach(removeLS);
-      window.currentUser = null;
-      try { currentUser = null; } catch(_) {}
+      API.auth({ action:'logout' }).catch(function(){});
+      setSessionToken('');
+      clearCurrent();
       if (oldLogout) return oldLogout.apply(this, arguments);
       if (window.updateUI) window.updateUI();
       if (window.navigate) window.navigate('home');
@@ -407,12 +689,12 @@
     var role = roleOf(user);
     var locked = user.uid === OWNER_UID;
     var out = [];
-    out.push('<button class="vip" onclick="azuraAdminUserAction(\'' + user.uid + '\',\'vip\',' + (!user.vip) + ')">' + (user.vip ? 'VIP ol' : 'VIP ber') + '</button>');
+    out.push('<button class="az-user-action vip" onclick="azuraAdminUserAction(\'' + user.uid + '\',\'vip\',' + (!user.vip) + ')">' + (user.vip ? 'VIP bekor' : 'VIP ber') + '</button>');
     if (meRole === 'owner' && !locked) {
-      out.push('<button class="admin" onclick="azuraAdminUserAction(\'' + user.uid + '\',\'role\',\'' + (role === 'admin' ? 'user' : 'admin') + '\')">' + (role === 'admin' ? 'Admin ol' : 'Admin ber') + '</button>');
+      out.push('<button class="az-user-action admin" onclick="azuraAdminUserAction(\'' + user.uid + '\',\'role\',\'' + (role === 'admin' ? 'user' : 'admin') + '\')">' + (role === 'admin' ? 'Admin olish' : 'Admin berish') + '</button>');
     }
-    if (!locked) out.push('<button class="danger" onclick="azuraDeleteUser(\'' + user.uid + '\')">O‘chirish</button>');
-    else out.push('<button disabled>Owner himoyalangan</button>');
+    if (!locked) out.push('<button class="az-user-action danger" onclick="azuraDeleteUser(\'' + user.uid + '\')">O‘chirish</button>');
+    else out.push('<button class="az-user-action owner-lock" disabled>Owner himoyalangan</button>');
     return out.join('');
   }
 
@@ -422,24 +704,69 @@
     var state = adminSearchState();
     var meRole = roleOf();
     var users = filterUsers();
-    var totalUsers = (window.USERS || []).length || users.length;
-    var vipCount = (window.USERS || []).filter(function(u){ return !!u.vip; }).length;
-    var staffCount = (window.USERS || []).filter(function(u){ var role = roleOf(u); return role === 'admin' || role === 'owner'; }).length;
-    var coinSum = (window.USERS || []).reduce(function(sum, u){ return sum + Number(u.coins || 0); }, 0);
+    var allUsers = (window.USERS || []).map(normUser);
+    var totalUsers = allUsers.length || users.length;
+    var vipCount = allUsers.filter(function(u){ return !!u.vip; }).length;
+    var staffCount = allUsers.filter(function(u){ var role = roleOf(u); return role === 'admin' || role === 'owner'; }).length;
+    var coinSum = allUsers.reduce(function(sum, u){ return sum + Number(u.coins || 0); }, 0);
+
+    function rolePill(user){
+      var role = roleOf(user);
+      return '<span class="az-role-pill ' + role + '">' + role.toUpperCase() + '</span>';
+    }
+    function vipPill(user){
+      return '<span class="az-state-pill ' + (user.vip ? 'vip' : 'basic') + '">' + (user.vip ? 'VIP' : 'Basic') + '</span>';
+    }
+    function coinEditor(user){
+      return '<div class="az-coin-editor">' +
+        '<button type="button" onclick="azuraAdminUserAction(\'' + user.uid + '\',\'coinDelta\',-100)">−</button>' +
+        '<input type="number" value="' + Number(user.coins || 0) + '" onchange="azuraAdminUserAction(\'' + user.uid + '\',\'coins\',this.value)">' +
+        '<button type="button" onclick="azuraAdminUserAction(\'' + user.uid + '\',\'coinDelta\',100)">+</button>' +
+      '</div>';
+    }
+    function desktopRow(user){
+      var initials = escapeHtml((user.username || 'A').slice(0, 1).toUpperCase());
+      return '<tr>' +
+        '<td><div class="az-au-usercell"><div class="az-avatar">' + initials + '</div><div class="az-au-usertext"><b>' + escapeHtml(user.username || 'User') + '</b><span>' + escapeHtml(user.email || 'email yo‘q') + '</span><code>' + escapeHtml(user.uid || '') + '</code></div></div></td>' +
+        '<td>' + rolePill(user) + '</td>' +
+        '<td>' + vipPill(user) + '</td>' +
+        '<td>' + coinEditor(user) + '</td>' +
+        '<td>' + escapeHtml(user.provider || 'local') + '</td>' +
+        '<td><div class="az-user-actions">' + userActionButtons(user, meRole) + '</div></td>' +
+      '</tr>';
+    }
+    function mobileCard(user){
+      var role = roleOf(user);
+      var initials = escapeHtml((user.username || 'A').slice(0, 1).toUpperCase());
+      return '<article class="az-user-mobile-card ' + role + ' ' + (user.vip ? 'vip' : '') + '">' +
+        '<div class="az-user-mobile-top">' +
+          '<div class="az-mobile-avatar">' + initials + '</div>' +
+          '<div class="az-au-usertext"><b>' + escapeHtml(user.username || 'User') + '</b><span>' + escapeHtml(user.email || 'email yo‘q') + '</span><code>' + escapeHtml(user.uid || '') + '</code></div>' +
+        '</div>' +
+        '<div class="az-user-mobile-meta">' +
+          '<div><b>Role</b><span>' + rolePill(user) + '</span></div>' +
+          '<div><b>Status</b><span>' + vipPill(user) + '</span></div>' +
+          '<div><b>Provider</b><span>' + escapeHtml(user.provider || 'local') + '</span></div>' +
+          '<div><b>Coin</b><span>' + Number(user.coins || 0).toLocaleString() + '</span></div>' +
+        '</div>' +
+        coinEditor(user) +
+        '<div class="az-user-actions">' + userActionButtons(user, meRole) + '</div>' +
+      '</article>';
+    }
+
     root.innerHTML =
       '<div class="az-admin-users-pro">' +
-        '<div class="az-au-head">' +
-          '<div><h2>Foydalanuvchilar</h2><p>D1 global boshqaruv. VIP, Admin, Coin va delete real vaqt ishlaydi.</p></div>' +
-          '<button class="az-au-sync" onclick="azuraPullUsers().then(renderAdminUsersPro)">↻ Yangilash</button>' +
-        '</div>' +
-        '<div class="az-au-stats">' +
-          '<div><b>' + totalUsers + '</b><span>Jami</span></div>' +
-          '<div><b>' + vipCount + '</b><span>VIP</span></div>' +
-          '<div><b>' + staffCount + '</b><span>Staff</span></div>' +
-          '<div><b>' + coinSum.toLocaleString() + '</b><span>Coin</span></div>' +
-        '</div>' +
-        '<div class="az-au-tools">' +
-          '<input id="az-user-search" placeholder="UID, ism, email, role..." value="' + escapeHtml(state.query) + '" oninput="renderAdminUsersPro()">' +
+        '<section class="az-au-hero">' +
+          '<div><h2>Foydalanuvchilar</h2><p>Global D1 foydalanuvchi bazasi. Search, VIP, admin, coin va delete amallari bitta toza boshqaruv qatlamiga yig‘ildi.</p></div>' +
+          '<div class="az-au-stats">' +
+            '<div><b>' + totalUsers + '</b><span>Jami</span></div>' +
+            '<div><b>' + vipCount + '</b><span>VIP</span></div>' +
+            '<div><b>' + staffCount + '</b><span>Staff</span></div>' +
+            '<div><b>' + coinSum.toLocaleString() + '</b><span>Coin</span></div>' +
+          '</div>' +
+        '</section>' +
+        '<section class="az-au-toolbar">' +
+          '<input id="az-user-search" placeholder="UID, username, email yoki role qidiring..." value="' + escapeHtml(state.query) + '" oninput="renderAdminUsersPro()">' +
           '<select id="az-user-filter" onchange="renderAdminUsersPro()">' +
             '<option value="all">Hammasi</option>' +
             '<option value="vip">VIP</option>' +
@@ -448,35 +775,17 @@
             '<option value="admin">Admin</option>' +
             '<option value="user">User</option>' +
           '</select>' +
-        '</div>' +
-        '<div class="az-au-grid">' +
-          users.map(function(user){
-            var role = roleOf(user);
-            return '<article class="az-user-card ' + (user.vip ? 'vip' : '') + ' ' + role + '">' +
-              '<div class="az-user-top">' +
-                '<div class="az-avatar">' + escapeHtml((user.username || 'A').slice(0, 1).toUpperCase()) + '</div>' +
-                '<div class="az-user-main">' +
-                  '<b>' + escapeHtml(user.username) + '</b>' +
-                  '<span>' + escapeHtml(user.email || 'email yo‘q') + '</span>' +
-                  '<code>' + escapeHtml(user.uid) + '</code>' +
-                '</div>' +
-                '<em class="role-' + role + '">' + role.toUpperCase() + '</em>' +
-              '</div>' +
-              '<div class="az-user-meta">' +
-                '<span>VIP: ' + (user.vip ? 'ha' : 'yo‘q') + '</span>' +
-                '<span>Coin: ' + Number(user.coins || 0).toLocaleString() + '</span>' +
-                '<span>Provider: ' + escapeHtml(user.provider || 'local') + '</span>' +
-              '</div>' +
-              '<div class="az-coin-line">' +
-                '<button onclick="azuraAdminUserAction(\'' + user.uid + '\',\'coinDelta\',-100)">-100</button>' +
-                '<input type="number" value="' + Number(user.coins || 0) + '" onchange="azuraAdminUserAction(\'' + user.uid + '\',\'coins\',this.value)">' +
-                '<button onclick="azuraAdminUserAction(\'' + user.uid + '\',\'coinDelta\',100)">+100</button>' +
-              '</div>' +
-              '<div class="az-user-actions">' + userActionButtons(user, meRole) + '</div>' +
-            '</article>';
-          }).join('') +
-        '</div>' +
+          '<button class="az-au-sync" type="button" onclick="azuraPullUsers().then(renderAdminUsersPro)">↻ Yangilash</button>' +
+        '</section>' +
+        '<section class="az-au-table-wrap">' +
+          '<table class="az-au-table">' +
+            '<thead><tr><th>Foydalanuvchi</th><th>Role</th><th>Status</th><th>Coin</th><th>Provider</th><th>Amallar</th></tr></thead>' +
+            '<tbody>' + (users.length ? users.map(desktopRow).join('') : '<tr><td colspan="6"><div class="az-user-empty">Filtr bo‘yicha foydalanuvchi topilmadi.</div></td></tr>') + '</tbody>' +
+          '</table>' +
+        '</section>' +
+        '<section class="az-au-mobile-list">' + (users.length ? users.map(mobileCard).join('') : '<div class="az-user-empty">Filtr bo‘yicha foydalanuvchi topilmadi.</div>') + '</section>' +
       '</div>';
+
     var filter = document.getElementById('az-user-filter');
     if (filter) filter.value = state.filter;
   }
@@ -514,43 +823,116 @@
       try { local = window.getBanners(); } catch(_) { local = []; }
     }
     local = Array.isArray(local) ? local : [];
+    var me = getCurrentUser();
+    var canWriteCloud = !!(me && isStaff(me));
     var changed = false;
-    ['media','poster','video','image','src'];
-    for (var i = 0; i < local.length; i++) {
-      var banner = local[i];
-      if (!banner) continue;
-      var fields = ['media','poster','video','image','src'];
-      for (var j = 0; j < fields.length; j++) {
-        var field = fields[j];
-        if (typeof banner[field] === 'string' && banner[field].indexOf('data:') === 0) {
-          changed = true;
+
+    if (canWriteCloud) {
+      for (var i = 0; i < local.length; i++) {
+        var banner = local[i];
+        if (!banner) continue;
+        var fields = ['media','poster','video','image','src'];
+        for (var j = 0; j < fields.length; j++) {
+          var field = fields[j];
+          if (typeof banner[field] !== 'string' || !banner[field]) continue;
           try {
-            var uploaded = await API.media({
-              dataUrl: banner[field],
-              filename: (banner.id || 'banner') + '-' + field,
+            var uploadedUrl = await uploadMediaReference(banner[field], {
+              filename: sanitizeUploadName((banner.id || 'banner') + '-' + field + (field === 'poster' ? '.jpg' : '')),
               folder: 'banners'
             });
-            banner[field] = uploaded.url;
+            if (uploadedUrl && uploadedUrl !== banner[field]) {
+              banner[field] = uploadedUrl;
+              changed = true;
+            }
           } catch (err) {
             if (!IS_LOCAL_FILE) toast(err.message || 'Banner upload xatosi', 'error');
           }
         }
       }
     }
+
     if (changed) {
       setLS('azura_banners_v4', local);
+    }
+
+    if (canWriteCloud) {
       try { await API.saveDB('azura_banners_v4', local); } catch(err) { console.warn(err); }
     }
+
     try {
       var data = await API.db('azura_banners_v4');
-      if (data && data.value) {
+      if (data && Array.isArray(data.value)) {
         setLS('azura_banners_v4', data.value);
         if (window.renderBanners) {
           try { window.renderBanners(); } catch(_) {}
         }
+        if (window.refreshBannerSlots) {
+          try { window.refreshBannerSlots(); } catch(_) {}
+        }
       }
     } catch (err) {
       console.warn('[AZURA banners]', err);
+    }
+  }
+
+  async function syncAdultContent(forceWrite){
+    var local = getLS(ADULT_CONTENT_KEY, null);
+    if (!Array.isArray(local) && typeof window.getAdultContent === 'function') {
+      try { local = window.getAdultContent(); } catch(_) { local = []; }
+    }
+    local = Array.isArray(local) ? local : [];
+    var me = getCurrentUser();
+    var canWriteCloud = !!(me && isStaff(me));
+    var changed = false;
+
+    if (canWriteCloud) {
+      for (var i = 0; i < local.length; i++) {
+        var item = local[i];
+        if (!item) continue;
+        if (typeof item.cover === 'string' && item.cover) {
+          try {
+            var coverUrl = await uploadMediaReference(item.cover, {
+              filename: sanitizeUploadName((item.id || 'adult') + '-cover'),
+              folder: 'adult/covers'
+            });
+            if (coverUrl && coverUrl !== item.cover) {
+              item.cover = coverUrl;
+              changed = true;
+            }
+          } catch (err) {
+            if (!IS_LOCAL_FILE) toast(err.message || '18+ cover upload xatosi', 'error');
+          }
+        }
+        if (typeof item.trailerVideo === 'string' && item.trailerVideo) {
+          try {
+            var videoUrl = await uploadMediaReference(item.trailerVideo, {
+              filename: sanitizeUploadName((item.id || 'adult') + '-trailer'),
+              folder: 'adult/videos'
+            });
+            if (videoUrl && videoUrl !== item.trailerVideo) {
+              item.trailerVideo = videoUrl;
+              changed = true;
+            }
+          } catch (err2) {
+            if (!IS_LOCAL_FILE) toast(err2.message || '18+ video upload xatosi', 'error');
+          }
+        }
+      }
+    }
+
+    if (changed) setLS(ADULT_CONTENT_KEY, local);
+
+    if (canWriteCloud && (forceWrite || changed || local.length)) {
+      try { await API.saveDB(ADULT_CONTENT_KEY, local); } catch(err3) { console.warn('[AZURA adult save]', err3); }
+    }
+
+    try {
+      var data = await API.db(ADULT_CONTENT_KEY);
+      if (data && Array.isArray(data.value)) {
+        setLS(ADULT_CONTENT_KEY, data.value);
+      }
+    } catch (err4) {
+      console.warn('[AZURA adult pull]', err4);
     }
   }
 
@@ -830,10 +1212,13 @@
       var continueRows = rows.filter(function(row){ return row.lastChapterId; }).slice(0, 6);
       var savedRows = rows.filter(function(row){ return row.saved; }).slice(0, 8);
       function card(row){
-        return '<article class="az-lib-card" onclick="openManhwa(\'' + row.id + '\')"><div class="az-lib-cover">' + (row.manhwa.cover ? '<img src="' + row.manhwa.cover + '" alt="" loading="lazy">' : '') + '</div><div class="az-lib-body"><strong>' + escapeHtml(row.manhwa.title) + '</strong><div class="az-lib-sub">' + escapeHtml(row.chapterLabel || 'O‘qishga tayyor') + '</div><div class="az-lib-chipline"><span>' + row.progress + '%</span><span>' + escapeHtml(row.source === 'saved' ? 'Saqlangan' : 'Faol') + '</span></div><div class="az-lib-progress"><i style="width:' + row.progress + '%"></i></div></div></article>';
+        var action = row.lastChapterId ? ("continueReading('" + row.id + "','" + row.lastChapterId + "')") : ("openManhwa('" + row.id + "')");
+        return '<article class="az-lib-card" onclick="' + action + '"><div class="az-lib-cover">' + (row.manhwa.cover ? '<img src="' + row.manhwa.cover + '" alt="" loading="lazy">' : '') + '</div><div class="az-lib-body"><strong>' + escapeHtml(row.manhwa.title) + '</strong><div class="az-lib-sub">' + escapeHtml(row.chapterLabel || 'O‘qishga tayyor') + '</div><div class="az-lib-chipline"><span>' + row.progress + '%</span><span>' + escapeHtml(row.source === 'saved' ? 'Saqlangan' : 'Faol') + '</span></div><div class="az-lib-progress"><i style="width:' + row.progress + '%"></i></div></div></article>';
       }
       function mini(row){
-        return '<div class="az-lib-mini"><div><strong style="display:block">' + escapeHtml(row.manhwa.title) + '</strong><span class="az-lib-sub">' + escapeHtml(row.chapterLabel || 'Saqlangan') + '</span></div><button type="button" onclick="event.stopPropagation();openManhwa(\'' + row.id + '\')">Ochish</button></div>';
+        var action = row.lastChapterId ? ("continueReading('" + row.id + "','" + row.lastChapterId + "')") : ("openManhwa('" + row.id + "')");
+        var label = row.lastChapterId ? 'Davom etish' : 'Ochish';
+        return '<div class="az-lib-mini"><div><strong style="display:block">' + escapeHtml(row.manhwa.title) + '</strong><span class="az-lib-sub">' + escapeHtml(row.chapterLabel || 'Saqlangan') + '</span></div><button type="button" onclick="event.stopPropagation();' + action + '">' + label + '</button></div>';
       }
       listEl.innerHTML = '<div class="az-lib-groups"><section class="az-lib-panel"><h3>Davom ettirish</h3><div class="az-lib-grid">' + top.map(card).join('') + '</div></section><aside class="az-lib-panel"><h3>Tezkor ro‘yxat</h3><div class="az-lib-side-list">' + (continueRows.length ? continueRows.map(mini).join('') : '<div class="az-lib-empty" style="padding:18px 0">Hali o‘qilgan bob yo‘q.</div>') + '</div></aside></div><section class="az-lib-panel"><h3>Saqlanganlar</h3><div class="az-lib-grid">' + savedRows.map(card).join('') + '</div></section>';
     };
@@ -872,6 +1257,62 @@
       if (targetId) addLibraryItem(targetId, 'saved').catch(function(){});
       return oldAddToLibrary ? oldAddToLibrary.apply(this, arguments) : undefined;
     };
+  }
+
+  function patchReadingProgressSync(){
+    if (window.__azuraProgressPatched) return;
+    window.__azuraProgressPatched = true;
+    var oldSaveReadingProgress = window.saveReadingProgress;
+    window.saveReadingProgress = function(percent){
+      try {
+        if (oldSaveReadingProgress) oldSaveReadingProgress.apply(this, arguments);
+      } catch (_) {}
+      try {
+        var me = getCurrentUser();
+        var chapterId = (window.currentChapter && window.currentChapter.id) || '';
+        var manhwaId = (window.currentManhwa && window.currentManhwa.id) || '';
+        if (!me || !chapterId || !manhwaId) return;
+        var lib = getLocalLibrary(me);
+        if (!Array.isArray(lib)) lib = [];
+        var row = lib.find(function(item){ return (typeof item === 'string' ? item : item.id) === manhwaId; });
+        if (!row) {
+          row = { id:manhwaId, saved:true, progress:0, source:'read', lastReadAt:Date.now() };
+          lib.unshift(row);
+        }
+        row.saved = row.saved !== false;
+        row.source = 'read';
+        row.lastChapterId = chapterId;
+        row.lastReadAt = Date.now();
+        row.progress = Math.max(Number(row.progress || 0), Math.max(1, Math.min(100, Math.round(Number(percent || 0)))));
+        saveLibrary(lib).catch(function(){});
+      } catch (err) {
+        console.warn('[AZURA progress sync]', err);
+      }
+    };
+  }
+
+  function patchBannerAndAdultWriters(){
+    if (window.__azuraBannerAdultWriterPatched) return;
+    window.__azuraBannerAdultWriterPatched = true;
+
+    if (window.saveBanners) {
+      var oldSaveBanners = window.saveBanners;
+      window.saveBanners = function(list){
+        var ok = oldSaveBanners ? oldSaveBanners.apply(this, arguments) : true;
+        setTimeout(function(){ syncBanners().catch(function(err){ console.warn('[AZURA banners save]', err); }); }, 50);
+        return ok;
+      };
+    }
+
+    if (window.saveAdultContent) {
+      var oldSaveAdultContent = window.saveAdultContent;
+      window.saveAdultContent = function(list){
+        var result = oldSaveAdultContent ? oldSaveAdultContent.apply(this, arguments) : undefined;
+        setLS(ADULT_CONTENT_KEY, list || []);
+        setTimeout(function(){ syncAdultContent(true).catch(function(err){ console.warn('[AZURA adult save]', err); }); }, 50);
+        return result;
+      };
+    }
   }
 
   function ensureSyncButton(){
@@ -941,37 +1382,43 @@
   function optimizeDOM(){
     clearTimeout(optimizeTimer);
     optimizeTimer = setTimeout(function(){
-      var bannerAudioOn = localStorage.getItem('azura_banner_audio_pref') === 'on';
-      document.querySelectorAll('img').forEach(function(img){
-        if (IS_LOCAL_FILE && /^\/api\/media/i.test(img.getAttribute('src') || '')) {
-          img.src = 'assets/covers/qora-qoplon-bolasi.jpg';
-          img.dataset.azuraLocalMediaFallback = '1';
-        }
-        if (!img.getAttribute('loading')) img.setAttribute('loading', 'lazy');
-        img.decoding = 'async';
-      });
-      document.querySelectorAll('video').forEach(function(video){
-        if (IS_LOCAL_FILE && /^\/api\/media/i.test(video.getAttribute('src') || '')) {
-          video.removeAttribute('src');
-          video.poster = video.poster || 'assets/covers/qora-qoplon-bolasi.jpg';
-          video.dataset.azuraLocalMediaFallback = '1';
-        }
-        var isBanner = !!video.closest('.az-bn-video-wrap');
-        video.loop = true;
-        video.playsInline = true;
-        video.setAttribute('playsinline', '');
-        if (!video.getAttribute('preload')) video.setAttribute('preload', 'metadata');
-        video.style.objectFit = 'cover';
-        if (isBanner) {
-          video.dataset.azuraBannerVideo = '1';
-          if (!bannerAudioOn) video.muted = true;
-        } else {
-          video.muted = true;
-        }
-      });
-      ensureSyncButton();
-      updateViewLabels();
-    }, 150);
+      var run = function(){
+        var bannerAudioOn = localStorage.getItem('azura_banner_audio_pref') === 'on';
+        var weakDevice = document.body.classList.contains('az-weak-device') || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        document.querySelectorAll('img').forEach(function(img){
+          if (IS_LOCAL_FILE && /^\/api\/media/i.test(img.getAttribute('src') || '')) {
+            img.src = 'assets/covers/qora-qoplon-bolasi.jpg';
+            img.dataset.azuraLocalMediaFallback = '1';
+          }
+          if (!img.getAttribute('loading')) img.setAttribute('loading', 'lazy');
+          if (!img.getAttribute('fetchpriority')) img.setAttribute('fetchpriority', img.closest('.hero,.top-banner,.banner') ? 'high' : 'low');
+          img.decoding = 'async';
+        });
+        document.querySelectorAll('video').forEach(function(video){
+          if (IS_LOCAL_FILE && /^\/api\/media/i.test(video.getAttribute('src') || '')) {
+            video.removeAttribute('src');
+            video.poster = video.poster || 'assets/covers/qora-qoplon-bolasi.jpg';
+            video.dataset.azuraLocalMediaFallback = '1';
+          }
+          var isBanner = !!video.closest('.az-bn-video-wrap');
+          video.loop = true;
+          video.playsInline = true;
+          video.setAttribute('playsinline', '');
+          if (!video.getAttribute('preload')) video.setAttribute('preload', weakDevice && !isBanner ? 'none' : 'metadata');
+          video.style.objectFit = 'cover';
+          if (isBanner) {
+            video.dataset.azuraBannerVideo = '1';
+            if (!bannerAudioOn) video.muted = true;
+          } else {
+            video.muted = true;
+          }
+        });
+        ensureSyncButton();
+        updateViewLabels();
+      };
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 900 });
+      else requestAnimationFrame(run);
+    }, 180);
   }
 
   function observeDOM(){
@@ -987,24 +1434,31 @@
   }
 
   async function fullSync(){
-    try {
-      await API.init();
-      await Promise.allSettled([
-        pullUsers(),
-        syncBanners(),
-        migrateChapters(),
-        pullViews(),
-        pullLibrary(true)
-      ]);
-      patchLibraryRenderer();
-      if (window.renderLibrary) window.renderLibrary();
-      ensureSyncButton();
-      optimizeDOM();
-      toast('☁ Cloud sync yakunlandi', 'success');
-    } catch (err) {
-      console.warn('[AZURA full sync]', err);
-      toast(err.message || 'Cloud sync xatosi', 'error');
-    }
+    if (fullSyncPromise) return fullSyncPromise;
+    fullSyncPromise = (async function(){
+      try {
+        await API.init();
+        await Promise.allSettled([
+          pullUsers(),
+          syncBanners(),
+          syncAdultContent(),
+          migrateChapters(),
+          pullViews(),
+          pullLibrary(true)
+        ]);
+        patchLibraryRenderer();
+        if (window.renderLibrary) window.renderLibrary();
+        ensureSyncButton();
+        optimizeDOM();
+        toast('☁ Cloud sync yakunlandi', 'success');
+      } catch (err) {
+        console.warn('[AZURA full sync]', err);
+        toast(err.message || 'Cloud sync xatosi', 'error');
+      } finally {
+        fullSyncPromise = null;
+      }
+    })();
+    return fullSyncPromise;
   }
   window.azuraFullSync = fullSync;
 
@@ -1018,20 +1472,40 @@
   }
 
   document.addEventListener('DOMContentLoaded', function(){
+    if (bootstrapRan) return;
+    bootstrapRan = true;
     patchAuth();
     patchAdmin();
     patchOpenActions();
     patchLibraryRenderer();
     patchMergedChapters();
+    patchReadingProgressSync();
+    patchBannerAndAdultWriters();
     injectCSS();
     optimizeDOM();
     observeDOM();
 
-    API.init().catch(function(err){ if (!IS_LOCAL_FILE) console.warn('[AZURA init]', err); })
+    Promise.resolve()
+      .then(function(){
+        if (!getSessionToken()) return null;
+        return API.authCurrent().then(function(data){
+          if (data && data.user) syncCurrent(normUser(data.user));
+          return data;
+        }).catch(function(err){
+          setSessionToken('');
+          clearCurrent();
+          if (!IS_LOCAL_FILE) console.warn('[AZURA auth hydrate]', err);
+          return null;
+        });
+      })
+      .then(function(){
+        return API.init().catch(function(err){ if (!IS_LOCAL_FILE) console.warn('[AZURA init]', err); });
+      })
       .then(function(){
         return Promise.allSettled([
           pullUsers(),
           syncBanners(),
+          syncAdultContent(),
           migrateChapters(),
           pullViews(),
           pullLibrary(true)

@@ -465,6 +465,86 @@
     });
   }
 
+
+  function ensureProfileOverview(){
+    var logged = $('#profile-loggedin');
+    if (!logged) return null;
+    var stats = $('.profile-stats-ribbon', logged);
+    if (!stats) return null;
+    var wrap = $('#az-profile-overview', logged);
+    if (!wrap) {
+      wrap = document.createElement('section');
+      wrap.id = 'az-profile-overview';
+      wrap.className = 'az-profile-overview';
+      wrap.innerHTML =
+        '<div class="az-profile-summary">' +
+          '<div class="az-avatar-media" id="az-profile-media">A</div>' +
+          '<div>' +
+            '<div class="az-profile-kicker">Hisob markazi</div>' +
+            '<div class="az-profile-heading" id="az-profile-heading">AZURA User</div>' +
+            '<div class="az-profile-subline" id="az-profile-subline"></div>' +
+            '<div class="az-profile-bio" id="az-profile-bio">Profil ma’lumotlari bu yerda ko‘rinadi.</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="az-profile-panel">' +
+          '<h3>Haqiqiy ma’lumotlar</h3>' +
+          '<div class="az-profile-grid">' +
+            '<div class="az-profile-info-item"><b>Email</b><span id="az-profile-email">—</span></div>' +
+            '<div class="az-profile-info-item"><b>Telegram</b><span id="az-profile-telegram">—</span></div>' +
+            '<div class="az-profile-info-item"><b>Tema</b><span id="az-profile-theme">auto</span></div>' +
+            '<div class="az-profile-info-item"><b>Provider</b><span id="az-profile-provider">local</span></div>' +
+          '</div>' +
+        '</div>';
+      stats.insertAdjacentElement('afterend', wrap);
+    }
+    return wrap;
+  }
+
+  function refreshProfileOverview(){
+    var wrap = ensureProfileOverview();
+    var me = getCurrent();
+    if (!wrap || !me) return;
+    var extra = me.extra || {};
+    var name = me.username || 'AZURA User';
+    var role = 'USER';
+    try {
+      if (typeof getUserRole === 'function') role = String(getUserRole(me.uid) || 'user').toUpperCase();
+    } catch(_){ }
+    var avatar = String(me.avatar || '').trim();
+    var media = $('#az-profile-media', wrap);
+    var heading = $('#az-profile-heading', wrap);
+    var subline = $('#az-profile-subline', wrap);
+    var bio = $('#az-profile-bio', wrap);
+    if (heading) heading.textContent = name;
+    if (subline) {
+      var vip = me.vip ? '<span class="az-profile-badge">👑 VIP faol</span>' : '<span class="az-profile-badge">📘 Oddiy hisob</span>';
+      var roleBadge = '<span class="az-profile-badge">⚙ ' + role + '</span>';
+      var saved = '<span class="az-profile-badge">🔖 ' + Number((me.library || []).length || 0) + ' saqlangan</span>';
+      subline.innerHTML = vip + roleBadge + saved;
+    }
+    if (bio) bio.textContent = extra.bio || 'Profilni tahrirlab bio, telegram va boshqa ma’lumotlarni yangilang.';
+    var emailEl = $('#az-profile-email', wrap);
+    var tgEl = $('#az-profile-telegram', wrap);
+    var themeEl = $('#az-profile-theme', wrap);
+    var providerEl = $('#az-profile-provider', wrap);
+    if (emailEl) emailEl.textContent = me.email || 'Email kiritilmagan';
+    if (tgEl) tgEl.textContent = extra.telegram || 'Ulanmagan';
+    if (themeEl) themeEl.textContent = extra.theme || 'auto';
+    if (providerEl) providerEl.textContent = me.provider || 'local';
+    if (media) {
+      if (/^https?:\/\//i.test(avatar)) media.innerHTML = '<img src="' + escapeHtml(avatar) + '" alt="' + escapeHtml(name) + '">';
+      else media.textContent = (name || 'A').slice(0, 1).toUpperCase();
+    }
+    var profileAvatar = $('#p-avatar');
+    if (profileAvatar) {
+      if (/^https?:\/\//i.test(avatar)) {
+        profileAvatar.innerHTML = '<img src="' + escapeHtml(avatar) + '" alt="' + escapeHtml(name) + '" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">';
+      } else if (!profileAvatar.querySelector('img')) {
+        profileAvatar.textContent = (name || 'A').slice(0, 1).toUpperCase();
+      }
+    }
+  }
+
   function refreshProfileAdminBadge(){
     var me = getCurrent();
     var btn = $('#profile-admin-btn .profile-menu-card-badge');
@@ -492,6 +572,7 @@
     ensurePasswordToggles();
     ensureAuthHelpers();
     ensureProfileTools();
+    refreshProfileOverview();
     refreshProfileAdminBadge();
     settleFixedButtons();
     if (typeof window.azuraRefreshBannerAudio === 'function') window.azuraRefreshBannerAudio();

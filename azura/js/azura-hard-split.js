@@ -6,6 +6,7 @@
   var lastToastMap = new Map();
   var ownerUID = 'AZR-YJTF-QYGT';
   var ownerPassword = 'azura2025owner';
+  var SESSION_TOKEN_KEY = 'azura_session_token';
 
   function q(sel, root){ return (root || document).querySelector(sel); }
   function qa(sel, root){ return Array.from((root || document).querySelectorAll(sel)); }
@@ -51,21 +52,125 @@
     var users = read('azura_users', []);
     var keyMatch = /[?&]key=([^&]+)/.exec(url || '');
     var dbKey = keyMatch ? decodeURIComponent(keyMatch[1]) : '';
-    if (/\/api\/(init|health)/.test(url)) return { ok:true, local:true, db:false, users: users.length, owner:{ uid: ownerUID, password: ownerPassword }, time:Date.now() };
+    function saveUsers(list){ write('azura_users', list || []); return list || []; }
+    function current(){
+      return currentUser();
+    }
+    function match(login){
+      var lookup = String(login || '').trim().toLowerCase();
+      return (users || []).find(function(u){
+        return String(u.uid || '').toLowerCase() === lookup
+          || String(u.email || '').toLowerCase() === lookup
+          || String(u.username || '').toLowerCase() === lookup;
+      }) || null;
+    }
+    function publicUser(user){
+      if (!user) return null;
+      var clone = JSON.parse(JSON.stringify(user));
+      delete clone.password;
+      return clone;
+    }
+    function persist(user){
+      write('azura_current', publicUser(user));
+      write('azura_current_user', publicUser(user));
+      try { window.currentUser = publicUser(user); currentUser = publicUser(user); } catch(_) {}
+      try { localStorage.setItem(SESSION_TOKEN_KEY, 'local_' + String((user || {}).uid || '').toUpperCase()); } catch(_) {}
+    }
+    if (/\/api\/(init|health)/.test(url)) return { ok:true, local:true, db:false, users: users.length, owner:{ uid: ownerUID }, time:Date.now() };
     if (/\/api\/users/.test(url)) {
-      if (method === 'GET') return { ok:true, local:true, users: users };
-      if (method === 'DELETE') return { ok:true, local:true };
+      if (method === 'GET') return { ok:true, local:true, users: users.map(publicUser) };
+      if (method === 'DELETE') {
+        var uidMatch = /[?&]uid=([^&]+)/.exec(url || '');
+        var targetUid = uidMatch ? decodeURIComponent(uidMatch[1]).toUpperCase() : '';
+        users = users.filter(function(u){ return String(u.uid || '').toUpperCase() !== targetUid; });
+        saveUsers(users);
+        return { ok:true, local:true };
+      }
       var body = {};
       try { body = JSON.parse(init.body || '{}'); } catch(_) {}
-      return { ok:true, local:true, user: body, users: users };
+      if (method === 'PATCH') {
+        var idx = users.findIndex(function(u){ return String(u.uid || '').toUpperCase() === String(body.uid || '').toUpperCase(); });
+        if (idx < 0) return { ok:false, local:true, error:'User topilmadi' };
+        if (body.action === 'coins') users[idx].coins = Math.max(0, Number(body.coins || 0));
+        if (body.action === 'vip') users[idx].vip = !!body.vip;
+        if (body.action === 'role' && String(users[idx].uid || '').toUpperCase() !== ownerUID) users[idx].role = body.role || 'user';
+        if (body.action === 'profile') {
+          users[idx] = Object.assign({}, users[idx], body.profile || {}, {
+            extra: Object.assign({}, users[idx].extra || {}, ((body.profile || {}).extra || {}))
+          });
+        }
+        users[idx].updatedAt = Date.now();
+        saveUsers(users);
+        if (current() && current().uid === users[idx].uid) persist(users[idx]);
+        return { ok:true, local:true, user: publicUser(users[idx]), users: users.map(publicUser) };
+      }
+      var i = users.findIndex(function(u){ return String(u.uid || '').toUpperCase() === String(body.uid || '').toUpperCase(); });
+      if (i >= 0) users[i] = Object.assign({}, users[i], body); else users.push(body);
+      saveUsers(users);
+      return { ok:true, local:true, user: publicUser(body), users: users.map(publicUser) };
     }
     if (/\/api\/auth/.test(url)) {
-      var body = {};
-      try { body = JSON.parse(init.body || '{}'); } catch(_) {}
-      if (body.action === 'login' && /^(AZR-YJTF-QYGT|owner@azura\.local|AZURA_OWNER)$/i.test(String(body.login || body.uid || '')) && String(body.password || '') === ownerPassword) {
-        return { ok:true, local:true, user:{ uid:ownerUID, username:'AZURA_OWNER', email:'owner@azura.local', role:'owner', coins:99999, vip:true, provider:'local', createdAt:Date.now(), updatedAt:Date.now() } };
+      var authBody = {};
+      try { authBody = JSON.parse(init.body || '{}'); } catch(_) {}
+      if (method === 'GET') {
+        var me = current();
+        return me ? { ok:true, local:true, user: publicUser(me), expiresAt:Date.now() + 86400000 } : { ok:false, local:true, error:'Sessiya topilmadi' };
       }
-      return { ok:false, local:true, error:'Local preview mode. Auth sync uchun Pages dev yoki deploy ishlating.' };
+      if (authBody.action === 'logout') {
+        try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch(_) {}
+        return { ok:true, local:true };
+      }
+      if (authBody.action === 'login') {
+        var login = authBody.login || authBody.uid || authBody.email || authBody.username || '';
+        var password = String(authBody.password || '');
+        var ownerHit = /^(AZR-YJTF-QYGT|owner@azura\.local|AZURA_OWNER)$/i.test(String(login || ''));
+        if (ownerHit && password === ownerPassword) {
+          var owner = match(ownerUID) || { uid:ownerUID, username:'AZURA_OWNER', email:'owner@azura.local', role:'owner', coins:99999, vip:true, provider:'local', extra:{} };
+          persist(owner);
+          return { ok:true, local:true, user: publicUser(owner), sessionToken: 'local_' + ownerUID, expiresAt:Date.now() + 86400000 };
+        }
+        var found = match(login);
+        if (!found || String(found.password || '') !== password) return { ok:false, local:true, error:'Login yoki parol noto‘g‘ri' };
+        persist(found);
+        return { ok:true, local:true, user: publicUser(found), sessionToken: 'local_' + String(found.uid || '').toUpperCase(), expiresAt:Date.now() + 86400000 };
+      }
+      if (authBody.action === 'register') {
+        var username = String(authBody.username || authBody.name || '').trim();
+        var email = String(authBody.email || '').trim();
+        if ((users || []).some(function(u){ return String(u.username || '').toLowerCase() === username.toLowerCase(); })) return { ok:false, local:true, error:'Bu foydalanuvchi nomi band' };
+        if (email && (users || []).some(function(u){ return String(u.email || '').toLowerCase() === email.toLowerCase(); })) return { ok:false, local:true, error:'Bu email allaqachon mavjud' };
+        var user = {
+          uid: 'AZR-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
+          username: username || 'AZURA_User',
+          email: email,
+          password: String(authBody.password || ''),
+          role: 'user',
+          coins: Number(authBody.coins || 50),
+          vip: false,
+          provider: 'local',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          extra: {}
+        };
+        users.push(user);
+        saveUsers(users);
+        persist(user);
+        return { ok:true, local:true, user: publicUser(user), sessionToken: 'local_' + String(user.uid || '').toUpperCase(), expiresAt:Date.now() + 86400000 };
+      }
+      if (authBody.action === 'social') {
+        var provider = String(authBody.provider || 'social');
+        var providerId = String(authBody.providerId || Math.random().toString(36).slice(2, 10).toUpperCase());
+        var uid = authBody.uid || ('AZR-' + provider.toUpperCase().slice(0, 3) + '-' + providerId.slice(-6).toUpperCase());
+        var existing = match(uid);
+        if (!existing) {
+          existing = { uid:uid, username:authBody.username || (provider + '_' + providerId.slice(-5).toLowerCase()), email:authBody.email || '', role:'user', coins:Number(authBody.coins || 0), vip:false, provider:provider, createdAt:Date.now(), updatedAt:Date.now(), extra:{} };
+          users.push(existing);
+          saveUsers(users);
+        }
+        persist(existing);
+        return { ok:true, local:true, user: publicUser(existing), sessionToken: 'local_' + String(existing.uid || '').toUpperCase(), expiresAt:Date.now() + 86400000 };
+      }
+      return { ok:false, local:true, error:'Noma’lum auth action' };
     }
     if (/\/api\/db/.test(url)) {
       if (method === 'GET') return dbKey ? { ok:true, local:true, key:dbKey, value: read(dbKey, null) } : { ok:true, local:true, data:{} };
