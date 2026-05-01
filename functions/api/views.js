@@ -32,3 +32,8 @@ export async function onRequestPost({ request, env }) {
     return json({ ok:true, id, count:Number(r?.count || 0), updatedAt:Number(r?.updatedAt || 0) });
   }, request, env);
 }
+
+export async function onRequestOptions({ request, env }) {
+  const { empty, corsHeaders } = await import('./_common.js');
+  return empty(204, corsHeaders());
+}

@@ -332,3 +332,8 @@ export async function onRequestPatch({ request, env }) {
     return json({ ok:false, error:'Noma’lum action' }, 400);
   }, request, env);
 }
+
+export async function onRequestOptions({ request, env }) {
+  const { empty, corsHeaders } = await import('./_common.js');
+  return empty(204, corsHeaders());
+}

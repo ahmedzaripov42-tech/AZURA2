@@ -80,3 +80,8 @@ export async function onRequestPost({ request, env }) {
     return json({ ok:true, key, updatedAt:t });
   }, request, env);
 }
+
+export async function onRequestOptions({ request, env }) {
+  const { empty, corsHeaders } = await import('./_common.js');
+  return empty(204, corsHeaders());
+}

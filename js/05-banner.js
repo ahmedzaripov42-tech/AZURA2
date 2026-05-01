@@ -276,25 +276,56 @@
   };
 
   /* ══ VIDEO AUDIO TOGGLE ════════════════════════════════════════ */
-  window._azBnToggleAudio = function (btn) {
-    var wrap  = btn.closest ? btn.closest('.az-bn-video-wrap') : btn.parentNode;
-    var video = wrap ? wrap.querySelector('video') : null;
-    if (!video) return;
-    video.muted = !video.muted;
-    if (!video.muted) {
-      video.volume = 1;
-      video.play().catch(function () {});
-    }
+  function syncAudioButton(btn, on) {
+    if (!btn) return;
     var icon  = btn.querySelector('.az-bn-audio-icon');
     var label = btn.querySelector('.az-bn-audio-label');
-    if (icon)  icon.textContent  = video.muted ? '🔇' : '🔊';
-    if (label) label.textContent = video.muted ? 'Ovoz' : 'O\'chirish';
-    btn.classList.toggle('active', !video.muted);
-    if (typeof showToast === 'function') {
-      showToast(video.muted ? '🔇 Ovoz o\'chirildi' : '🔊 Ovoz yoqildi', 'info');
-    }
-  };
+    if (icon)  icon.textContent  = on ? '🔊' : '🔇';
+    if (label) label.textContent = on ? 'O\'chirish' : 'Ovoz';
+    btn.classList.toggle('active', !!on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
 
+  function muteBannerVideo(video) {
+    if (!video) return;
+    video.muted = true;
+    video.volume = 0;
+    syncAudioButton(video.closest('.az-bn-video-wrap') && video.closest('.az-bn-video-wrap').querySelector('.az-bn-audio-btn'), false);
+  }
+
+  window._azBnToggleAudio = function (btn, forceState) {
+    var wrap  = btn && btn.closest ? btn.closest('.az-bn-video-wrap') : btn && btn.parentNode;
+    var video = wrap ? wrap.querySelector('video') : null;
+    if (!video) return false;
+    var turnOn = (typeof forceState === 'boolean') ? forceState : (video.muted || video.volume === 0);
+    document.querySelectorAll('.az-bn-video-wrap video').forEach(function (v) { if (v !== video) muteBannerVideo(v); });
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('preload', 'metadata');
+    video.style.objectFit = 'cover';
+    if (turnOn) {
+      video.muted = false;
+      video.volume = 1;
+      try { window.__azuraAudibleBannerVideo = video; } catch (_) {}
+      try { document.dispatchEvent(new CustomEvent('azura:banner-audio-on', { detail: { video: video, wrap: wrap } })); } catch (_) {}
+      var playPromise = video.play();
+      if (playPromise && playPromise.catch) {
+        playPromise.catch(function (err) {
+          muteBannerVideo(video);
+          try { document.dispatchEvent(new CustomEvent('azura:banner-audio-off', { detail: { video: video, wrap: wrap, error: err } })); } catch (_) {}
+          if (typeof showToast === 'function') showToast('Brauzer ovoz uchun tugmani yana bir marta bosishni talab qildi', 'info');
+          console.warn('[Banner audio]', err);
+        });
+      }
+    } else {
+      muteBannerVideo(video);
+      try { if (window.__azuraAudibleBannerVideo === video) window.__azuraAudibleBannerVideo = null; } catch (_) {}
+      try { document.dispatchEvent(new CustomEvent('azura:banner-audio-off', { detail: { video: video, wrap: wrap } })); } catch (_) {}
+    }
+    syncAudioButton(btn, turnOn);
+    if (typeof showToast === 'function') showToast(turnOn ? '🔊 Ovoz yoqildi' : '🔇 Ovoz o\'chirildi', 'info');
+    return false;
+  };
   /* ══ BUILD HTML ════════════════════════════════════════════════ */
 
   function makeMediaHTML(b, idx) {
@@ -320,10 +351,10 @@
           '<div class="az-bn-video-wrap">' +
             '<video id="' + placeholderId + '" class="az-bn-media" autoplay muted loop playsinline' +
               (b.poster ? ' poster="' + esc(b.poster) + '"' : '') +
-              ' preload="auto">' +
+              ' preload="metadata">' +
             '</video>' +
             '<button class="az-bn-audio-btn" title="Ovoz yoqish / o\'chirish"' +
-              ' onclick="event.stopPropagation();window._azBnToggleAudio(this)">' +
+              ' aria-pressed="false" onclick="event.preventDefault();event.stopPropagation();return window._azBnToggleAudio(this)">' +
               '<span class="az-bn-audio-icon">🔇</span>' +
               '<span class="az-bn-audio-label">Ovoz</span>' +
             '</button>' +
@@ -338,7 +369,7 @@
             '<source src="' + esc(b.media) + '"/>' +
           '</video>' +
           '<button class="az-bn-audio-btn" title="Ovoz yoqish / o\'chirish"' +
-            ' onclick="event.stopPropagation();window._azBnToggleAudio(this)">' +
+            ' aria-pressed="false" onclick="event.preventDefault();event.stopPropagation();return window._azBnToggleAudio(this)">' +
             '<span class="az-bn-audio-icon">🔇</span>' +
             '<span class="az-bn-audio-label">Ovoz</span>' +
           '</button>' +
@@ -484,8 +515,29 @@
       for (var j = 0; j < dt.length; j++) dt[j].classList.toggle('active', j === cur);
     }
 
-    // Auto-rotate
-    var timer = setInterval(function () { goTo(cur + 1); }, ROTATE_DELAY);
+    // Auto-rotate. Pause while banner sound is enabled; otherwise the slide
+    // advances after ROTATE_DELAY and the user hears sound start, then stop.
+    var audioPinned = false;
+    var timer = null;
+    function startTimer() {
+      clearInterval(timer);
+      if (!audioPinned) timer = setInterval(function () { goTo(cur + 1); }, ROTATE_DELAY);
+    }
+    startTimer();
+    function onAudioOn(ev) {
+      if (ev && ev.detail && ev.detail.wrap && el.contains(ev.detail.wrap)) {
+        audioPinned = true;
+        clearInterval(timer);
+      }
+    }
+    function onAudioOff(ev) {
+      if (ev && ev.detail && ev.detail.wrap && el.contains(ev.detail.wrap)) {
+        audioPinned = false;
+        startTimer();
+      }
+    }
+    document.addEventListener('azura:banner-audio-on', onAudioOn);
+    document.addEventListener('azura:banner-audio-off', onAudioOff);
 
     // Dots
     el.querySelectorAll('.az-bn-dot').forEach(function (dot) {
@@ -493,7 +545,7 @@
         e.stopPropagation();
         clearInterval(timer);
         goTo(parseInt(dot.dataset.dot) || 0);
-        timer = setInterval(function () { goTo(cur + 1); }, ROTATE_DELAY);
+        startTimer();
       });
     });
 
@@ -511,11 +563,15 @@
         live.splice(cur, 1);
         if (live.length === 0) {
           clearInterval(timer);
+          document.removeEventListener('azura:banner-audio-on', onAudioOn);
+          document.removeEventListener('azura:banner-audio-off', onAudioOff);
           collapseSlot(el);
           return;
         }
         // Re-render with remaining
         clearInterval(timer);
+        document.removeEventListener('azura:banner-audio-on', onAudioOn);
+        document.removeEventListener('azura:banner-audio-off', onAudioOff);
         renderCarousel(el, live);
       });
     }
@@ -539,7 +595,7 @@
       if (Math.abs(dx) > 42) {
         clearInterval(timer);
         goTo(cur + (dx < 0 ? 1 : -1));
-        timer = setInterval(function () { goTo(cur + 1); }, ROTATE_DELAY);
+        startTimer();
       }
     }, { passive: true });
   }

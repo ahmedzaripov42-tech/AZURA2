@@ -116,6 +116,7 @@
 <link rel="stylesheet" href="azura-stage2-premium.css?v=1">
 <link rel="stylesheet" href="azura-stage3-real.css?v=1">
 <link rel="stylesheet" href="azura-stage4-hardening.css?v=1">
+<link rel="stylesheet" href="azura-stage5-rootfix.css?v=1">
 
 <!-- PDF.js for real WebP conversion -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -1179,7 +1180,7 @@
   <div class="mobile-topbar" style="display:none;">
     <div class="topbar-logo" style="background:linear-gradient(135deg,#9B0A1A,#C41E3A);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:900;letter-spacing:2px;">18+</div>
     <div class="topbar-right">
-      <div class="topbar-btn" id="adult-admin-mobile-btn" onclick="aapNav(document.querySelector('[data-aap=content]'),'content')" style="display:none;color:#F0D068;">⚙</div>
+      <div class="topbar-btn" id="adult-admin-mobile-btn" onclick="openAdultAdmin()" style="display:none;color:#F0D068;">⚙</div>
       <div class="topbar-btn" onclick="navigate('home')">✕</div>
     </div>
   </div>
@@ -1189,7 +1190,7 @@
       Eksklyuziv
     </div>
     <div class="topbar-actions">
-      <button id="adult-admin-desktop-btn" onclick="aapNav(document.querySelector('[data-aap=content]'),'content')" style="display:none;padding:7px 14px;border-radius:9px;background:linear-gradient(135deg,rgba(212,175,55,0.18),rgba(139,93,28,0.1));border:1px solid rgba(212,175,55,0.4);color:#F0D068;font-family:'Cinzel',serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;">⚙ ADMIN</button>
+      <button id="adult-admin-desktop-btn" onclick="openAdultAdmin()" style="display:none;padding:7px 14px;border-radius:9px;background:linear-gradient(135deg,rgba(212,175,55,0.18),rgba(139,93,28,0.1));border:1px solid rgba(212,175,55,0.4);color:#F0D068;font-family:'Cinzel',serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;">⚙ ADMIN</button>
     </div>
   </div>
 
@@ -1660,5 +1661,6 @@
 <script src="js/azura-stage2-premium.js?v=1"></script>
 <script src="js/azura-stage3-expansion.js?v=1"></script>
 <script src="js/azura-stage4-hardening.js?v=1"></script>
+<script src="js/azura-stage5-rootfix.js?v=1"></script>
 </body>
 </html>

@@ -699,3 +699,8 @@ export async function route(handler, request, env) {
     return json({ ok:false, error:message, code, requestId:reqId }, status, { 'x-azura-request-id': reqId });
   }
 }
+
+export async function onRequestOptions({ request, env }) {
+  const { empty, corsHeaders } = await import('./_common.js');
+  return empty(204, corsHeaders());
+}

@@ -14,3 +14,8 @@ export async function onRequestGet({ request, env }) {
     });
   }, request, env);
 }
+
+export async function onRequestOptions({ request, env }) {
+  const { empty, corsHeaders } = await import('./_common.js');
+  return empty(204, corsHeaders());
+}
