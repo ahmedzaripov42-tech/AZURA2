@@ -1,5 +1,0 @@
-AZURA local test fix:
-- If index.html is opened with file://, Cloudflare /api calls are disabled automatically.
-- This prevents repeated Failed to fetch toasts and CORS spam while previewing locally.
-- D1/R2 features still require Cloudflare Pages deployment or local Pages dev server.
-- /api/media URLs in local file preview are replaced with a cover fallback to stop repeated browser errors.
